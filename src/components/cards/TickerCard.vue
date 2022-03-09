@@ -23,7 +23,7 @@
 
         <q-item-label>
           <!-- q-btn size="sm" flat round icon="date_range" class="bg-indigo-7 text-white" title="Date range"/ -->
-          <q-icon name="date_range" color="blue" size="20px" title="Date range"/>
+          <q-icon name="date_range" color="blue" size="20px"/>
           {{data.fromdate}}
           -
           {{data.todate}}
@@ -33,7 +33,7 @@
         </q-item-label>
 
         <q-item-label>
-          <q-icon name="account_balance_wallet" color="gray" size="20px" title="ptf inizio"/>
+          <q-icon name="account_balance_wallet" color="gray" size="20px"/>
           {{data['ptf inizio']}}
           <q-tooltip>
             Ptf inizio
@@ -41,7 +41,7 @@
         </q-item-label>
 
         <q-item-label>
-          <q-icon name="show_chart" color="gray" size="20px" title="PNL"/>
+          <q-icon name="show_chart" color="gray" size="20px"/>
           {{data.PNL}}
           <q-tooltip>
             PNL
@@ -49,7 +49,7 @@
         </q-item-label>
 
         <q-item-label>
-          <q-icon name="candlestick_chart" color="gray" size="20px" title="Trades"/>
+          <q-icon name="candlestick_chart" color="gray" size="20px"/>
           {{data.trades}}
           <q-tooltip>
             Trades
