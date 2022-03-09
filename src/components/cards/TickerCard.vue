@@ -8,7 +8,7 @@
 
       <q-item-section side>
         <q-item-label class="text-grey-8">
-          <a :href="baseURL+'/'+name+constants.STATS_FILE" target="_blank" style="text-decoration: none;"><!--{{ index }} {{ backup }}--> <q-icon name="insights" color="secondary" size="20px"/></a>
+          <a ref="link" :href="baseURL+'/'+name+constants.STATS_FILE" target="_blank" style="text-decoration: none;"><!--{{ index }} {{ backup }}--> <q-icon name="insights" color="secondary" size="20px"/></a>
           <q-tooltip>
             Statistiche
           </q-tooltip>
@@ -111,6 +111,10 @@ import { constants } from 'boot/constants'
 export default defineComponent({
   name: "TickerCard",
   props: {
+    error: {
+      type: Boolean,
+      default: false
+    },
     name: String,
     index: Number,
     folder: {
@@ -119,17 +123,28 @@ export default defineComponent({
     }
   },
   setup(props) {
+    const link = ref(null)
     const data = ref([])
     const baseURL = ref(constants.API_BASE_FOLDER)
 
     function getTickerData () {
-      if(props.folder!='') {
-        baseURL.value = constants.API_BACKUP_FOLDER + '/' + props.folder + constants.API_BASE_FOLDER
-        loadData()
-      } else {
-        baseURL.value = constants.API_BASE_FOLDER
-        loadData()
+      if(!props.error) {
+        if(props.folder!='') {
+          baseURL.value = constants.API_BACKUP_FOLDER + '/' + props.folder + constants.API_BASE_FOLDER
+          loadData()
+        } else {
+          baseURL.value = constants.API_BASE_FOLDER
+          loadData()
+        }
       }
+    }
+
+    function resetData () {
+      data.value = []
+    }
+
+    function handleUnexpectedError(e) {
+      link.value.setAttribute('href','#')
     }
 
     function loadData() {
@@ -138,6 +153,7 @@ export default defineComponent({
         data.value = response.data[Object.keys(response.data)[0]]
       }).catch( (e) => {
         console.log(e)
+        handleUnexpectedError(e)
       })
     }
 
@@ -148,10 +164,12 @@ export default defineComponent({
 
     onUpdated(() => {
       console.log('TickerCard updated', props)
+      resetData()
       getTickerData()
     })
 
     return {
+      link,
       data,
       baseURL,
       constants
