@@ -18,7 +18,9 @@
     </q-item>
 
     <q-separator></q-separator>
+
     <q-card-section>
+
       <div class="q-pa-sm text-grey-8">
 
         <q-item-label>
@@ -32,59 +34,72 @@
           </q-tooltip>
         </q-item-label>
 
-        <q-item-label>
-          <q-icon name="account_balance_wallet" color="gray" size="20px"/>
-          {{data['ptf inizio']}}
-          <q-tooltip>
-            Ptf inizio
-          </q-tooltip>
-        </q-item-label>
+      </div>
 
-        <q-item-label>
-          <q-icon name="show_chart" color="gray" size="20px"/>
-          {{data.PNL}}
-          <q-tooltip>
-            PNL
-          </q-tooltip>
-        </q-item-label>
+      <div class="q-pa-sm row">
 
-        <q-item-label>
-          <q-icon name="candlestick_chart" color="gray" size="20px"/>
-          {{data.trades}}
-          <q-tooltip>
-            Trades
-          </q-tooltip>
-        </q-item-label>
+         <div class="q-pa-sm text-grey-8 col">
 
-        <q-item-label>
-          <!-- q-icon name="help_center" color="gray" size="20px" title="SQN"/ -->
-          <strong>SQN</strong>:
-          {{data.SQN}}
-          <q-tooltip>
-            SQN
-          </q-tooltip>
-        </q-item-label>
+           <q-item-label>
+            <q-icon name="account_balance_wallet" color="gray" size="20px"/>
+            {{data['ptf inizio']}}
+            <q-tooltip>
+              Ptf inizio
+            </q-tooltip>
+          </q-item-label>
 
-        <q-item-label>
-          <!-- q-icon name="show_chart" color="gray" size="20px" title="Sharpe ratio"/ -->
-          <strong>Sharpe</strong>:
-          {{data.Sharpe}}
-          <q-tooltip>
-            Sharpe ratio
-          </q-tooltip>
-        </q-item-label>
+          <q-item-label>
+            <q-icon name="show_chart" color="gray" size="20px"/>
+            {{data.PNL}}
+            <q-tooltip>
+              PNL
+            </q-tooltip>
+          </q-item-label>
 
-        <q-item-label>
-          <!-- q-icon name="help" color="gray" size="20px" title="VWR"/ -->
-          <strong>VWR</strong>:
-          {{data.VWR}}
-          <q-tooltip>
-            VWR
-          </q-tooltip>
-        </q-item-label>
+          <q-item-label>
+            <q-icon name="candlestick_chart" color="gray" size="20px"/>
+            {{data.trades}}
+            <q-tooltip>
+              Trades
+            </q-tooltip>
+          </q-item-label>
 
-        <hr>
+         </div>
 
+         <div class="q-pa-sm text-grey-8 col">
+
+           <q-item-label>
+            <!-- q-icon name="help_center" color="gray" size="20px" title="SQN"/ -->
+            <strong>SQN</strong>:
+            {{data.SQN}}
+            <q-tooltip>
+              SQN
+            </q-tooltip>
+          </q-item-label>
+
+          <q-item-label>
+            <!-- q-icon name="show_chart" color="gray" size="20px" title="Sharpe ratio"/ -->
+            <strong>Sharpe</strong>:
+            {{data.Sharpe}}
+            <q-tooltip>
+              Sharpe ratio
+            </q-tooltip>
+          </q-item-label>
+
+          <q-item-label>
+            <!-- q-icon name="help" color="gray" size="20px" title="VWR"/ -->
+            <strong>VWR</strong>:
+            {{data.VWR}}
+            <q-tooltip>
+              VWR
+            </q-tooltip>
+          </q-item-label>
+
+         </div>
+
+      </div>
+
+      <hr>
 
         <q-expansion-item
         expand-separator
@@ -98,7 +113,8 @@
         </q-card>
       </q-expansion-item>
 
-      </div>
+
+
     </q-card-section>
   </q-card>
 </template>
