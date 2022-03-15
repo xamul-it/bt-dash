@@ -99,13 +99,10 @@
 
       </div>
 
-      <hr>
-
-        <q-expansion-item
-        expand-separator
-        icon="source"
-        caption="Sorgente dati"
-      >
+      <q-expansion-item expand-separator dense dense-toggle :header-style="{ paddingTop: '0px', paddingBottom: '0px' }">
+        <q-tooltip>
+            Dati
+          </q-tooltip>
         <q-card>
           <q-card-section>
             <pre class="text-grey-8">{{data}}</pre>
