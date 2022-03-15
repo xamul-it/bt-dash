@@ -3,7 +3,7 @@
     <q-item>
 
       <q-item-section>
-        <q-item-label class="text-grey-8 text-weight-bold">{{ name }}</q-item-label>
+        <q-item-label class="text-grey-8 text-weight-bold" :style="[data.PNL<0 ? {'color': 'red !important'}:'']">{{ name }}</q-item-label>
       </q-item-section>
 
       <q-item-section side>
@@ -38,27 +38,65 @@
 
       <div class="q-pa-sm row">
 
-         <div class="q-pa-sm text-grey-8 col">
+         <div class="text-grey-8 col">
 
            <q-item-label>
             <q-icon name="account_balance_wallet" color="gray" size="20px"/>
-            {{data['ptf inizio']}}
+            <span :style="[data['ptf inizio']<0 ? {'color': 'red'}:'']">{{data['ptf inizio']}}</span>
             <q-tooltip>
               Ptf inizio
             </q-tooltip>
           </q-item-label>
 
+        </div>
+        <div class="text-grey-8 col">
+
+          <q-item-label>
+            <!-- q-icon name="help_center" color="gray" size="20px" title="SQN"/ -->
+            <strong>SQN</strong>:
+             <span :style="[data.SQN<0 ? {'color': 'red'}:'']">{{data.SQN}}</span>
+            <q-tooltip>
+              SQN
+            </q-tooltip>
+          </q-item-label>
+
+        </div>
+      </div>
+
+      <div class="q-pa-sm row">
+
+        <div class="text-grey-8 col">
+
           <q-item-label>
             <q-icon name="show_chart" color="gray" size="20px"/>
-            {{data.PNL}}
+            <span :style="[data.PNL<0 ? {'color': 'red'}:'']">{{data.PNL}}</span>
             <q-tooltip>
               PNL
             </q-tooltip>
           </q-item-label>
 
+        </div>
+        <div class="text-grey-8 col">
+
+          <q-item-label>
+            <!-- q-icon name="show_chart" color="gray" size="20px" title="Sharpe ratio"/ -->
+            <strong>Sharpe</strong>:
+            <span :style="[data.Sharpe<0 ? {'color': 'red'}:'']">{{data.Sharpe}}</span>
+            <q-tooltip>
+              Sharpe ratio
+            </q-tooltip>
+          </q-item-label>
+
+        </div>
+
+      </div>
+      <div class="q-pa-sm row">
+
+        <div class="text-grey-8 col">
+
           <q-item-label>
             <q-icon name="candlestick_chart" color="gray" size="20px"/>
-            {{data.trades}}
+            <span :style="[data.trades<0 ? {'color': 'red'}:'']">{{data.trades}}</span>
             <q-tooltip>
               Trades
             </q-tooltip>
@@ -66,30 +104,12 @@
 
          </div>
 
-         <div class="q-pa-sm text-grey-8 col">
-
-           <q-item-label>
-            <!-- q-icon name="help_center" color="gray" size="20px" title="SQN"/ -->
-            <strong>SQN</strong>:
-            {{data.SQN}}
-            <q-tooltip>
-              SQN
-            </q-tooltip>
-          </q-item-label>
-
-          <q-item-label>
-            <!-- q-icon name="show_chart" color="gray" size="20px" title="Sharpe ratio"/ -->
-            <strong>Sharpe</strong>:
-            {{data.Sharpe}}
-            <q-tooltip>
-              Sharpe ratio
-            </q-tooltip>
-          </q-item-label>
+         <div class="text-grey-8 col">
 
           <q-item-label>
             <!-- q-icon name="help" color="gray" size="20px" title="VWR"/ -->
             <strong>VWR</strong>:
-            {{data.VWR}}
+            <span :style="[data.VWR<0 ? {'color': 'red'}:'']">{{data.VWR}}</span>
             <q-tooltip>
               VWR
             </q-tooltip>
