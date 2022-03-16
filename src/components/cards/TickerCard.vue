@@ -42,7 +42,7 @@
 
            <q-item-label>
             <q-icon name="account_balance_wallet" color="gray" size="20px"/>
-            <span :style="[data['ptf inizio']<0 ? {'color': 'red'}:'']">{{data['ptf inizio']}}</span>
+            <span :style="[data['ptf inizio']<0 ? {'color': 'red'}:'']">{{$filters.floatFormat(data['ptf inizio'],0)}}</span>
             <q-tooltip>
               Ptf inizio
             </q-tooltip>
@@ -54,7 +54,7 @@
           <q-item-label>
             <!-- q-icon name="help_center" color="gray" size="20px" title="SQN"/ -->
             <strong>SQN</strong>:
-             <span :style="[data.SQN<0 ? {'color': 'red'}:'']">{{data.SQN}}</span>
+            <span :style="[data.SQN<0 ? {'color': 'red'}:'']">{{$filters.floatFormat(data.SQN,3)}}</span>
             <q-tooltip>
               SQN
             </q-tooltip>
@@ -69,7 +69,7 @@
 
           <q-item-label>
             <q-icon name="show_chart" color="gray" size="20px"/>
-            <span :style="[data.PNL<0 ? {'color': 'red'}:'']">{{data.PNL}}</span>
+            <span :style="[data.PNL<0 ? {'color': 'red'}:'']">{{$filters.floatFormat(data.PNL,5)}}</span>
             <q-tooltip>
               PNL
             </q-tooltip>
@@ -81,7 +81,7 @@
           <q-item-label>
             <!-- q-icon name="show_chart" color="gray" size="20px" title="Sharpe ratio"/ -->
             <strong>Sharpe</strong>:
-            <span :style="[data.Sharpe<0 ? {'color': 'red'}:'']">{{data.Sharpe}}</span>
+            <span :style="[data.Sharpe<0 ? {'color': 'red'}:'']">{{$filters.floatFormat(data.Sharpe,3)}}</span>
             <q-tooltip>
               Sharpe ratio
             </q-tooltip>
@@ -96,7 +96,7 @@
 
           <q-item-label>
             <q-icon name="candlestick_chart" color="gray" size="20px"/>
-            <span :style="[data.trades<0 ? {'color': 'red'}:'']">{{data.trades}}</span>
+            <span :style="[data.trades<0 ? {'color': 'red'}:'']">{{$filters.floatFormat(data.trades,0)}}</span>
             <q-tooltip>
               Trades
             </q-tooltip>
@@ -109,7 +109,7 @@
           <q-item-label>
             <!-- q-icon name="help" color="gray" size="20px" title="VWR"/ -->
             <strong>VWR</strong>:
-            <span :style="[data.VWR<0 ? {'color': 'red'}:'']">{{data.VWR}}</span>
+            <span :style="[data.VWR<0 ? {'color': 'red'}:'']">{{$filters.floatFormat(data.VWR,3)}}</span>
             <q-tooltip>
               VWR
             </q-tooltip>
