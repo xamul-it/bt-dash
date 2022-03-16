@@ -118,7 +118,7 @@ export default defineComponent({
 
     function getBackupData() {
       let backupDatePath = date.formatDate(dateValue.value, 'YYYYMMDD')
-      getLatestData(constants.API_BACKUP_FOLDER+'/' + backupDatePath + constants.API_BASE_FOLDER)
+      getLatestData(constants.API_BACKUP_FOLDER+'/' + backupDatePath + constants.API_BACKUP_BASE_FOLDER)
       backupPath.value = backupDatePath
       //this.$forceUpdate()
     }

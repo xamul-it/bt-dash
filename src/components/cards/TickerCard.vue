@@ -163,7 +163,7 @@ export default defineComponent({
     function getTickerData () {
       if(!props.error) {
         if(props.folder!='') {
-          baseURL.value = constants.API_BACKUP_FOLDER + '/' + props.folder + constants.API_BASE_FOLDER
+          baseURL.value = constants.API_BACKUP_FOLDER + '/' + props.folder + constants.API_BACKUP_BASE_FOLDER
           loadData()
         } else {
           baseURL.value = constants.API_BASE_FOLDER
