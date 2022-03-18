@@ -50,7 +50,6 @@
         </template>
         <template v-slot:after>
           <div class="q-pa-md">
-
             <div class="container">
               <iframe class="responsive-iframe" :src="source"></iframe>
               <q-btn class="absolute-top-right" round color="secondary" icon="close" @click="source = ''" size="sm"/>
@@ -66,19 +65,17 @@
             </div>
           </div>
 
-          <q-dialog v-model="statsDialogEnable" persistent transition-show="scale" transition-hide="scale" class="mobile-only">
-            <q-card class="" style="width: 100%">
+          <q-dialog v-model="statsDialogEnable" persistent maximized transition-show="scale" transition-hide="scale" class="mobile-only">
+            <q-card flat>
 
               <q-card-actions align="right" class="bg-white text-teal">
                 <q-btn round icon="close" size="sm" v-close-popup />
               </q-card-actions>
 
               <q-card-section class="bg-white q-pt-none">
-                <!-- div class="q-pa-md" -->
-                    <div class="container">
-                      <iframe class="responsive-iframe" :src="source"></iframe>
-                    </div>
-                  <!-- /div -->
+                <div class="container">
+                  <iframe class="responsive-iframe" :src="source"></iframe>
+                </div>
               </q-card-section>
 
             </q-card>
@@ -113,7 +110,7 @@
 import { defineComponent, defineAsyncComponent, ref, onMounted, computed, watch, nextTick, Vue } from 'vue'
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
-import { date } from 'quasar'
+import { date, Platform } from 'quasar'
 
 function setDateNowFormatted() {
   let timeStamp = Date.now()
@@ -128,13 +125,18 @@ export default defineComponent({
 
   setup() {
     const tickerClass = computed(() => {
-      if(splitterModel.value >= 80) {
-        return 'col-lg-2 col-md-3 col-sm-4 col-xs-6'
-      } else if(splitterModel.value < 80 && splitterModel.value > 65) {
-        return 'col-lg-3 col-md-5 col-sm-9 col-xs-12'
-      } else {
-        return 'col-lg-4 col-md-6 col-sm-12 col-xs-12'
+      if(Platform.is.desktop) {
+        if(splitterModel.value >= 80) {
+          return 'col-lg-2 col-md-3 col-sm-4 col-xs-6'
+        } else if(splitterModel.value < 80 && splitterModel.value > 65) {
+          return 'col-lg-3 col-md-5 col-sm-9 col-xs-12'
+        } else {
+          return 'col-lg-4 col-md-6 col-sm-12 col-xs-12'
+        }
+      } else if(Platform.is.mobile) {
+        return 'col-lg-4 col-md-4 col-sm-6 col-xs-12'
       }
+
     })
     const splitterDisable = computed(() => {
       if(!source.value || source.value == '' || source == '#')
