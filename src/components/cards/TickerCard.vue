@@ -1,23 +1,29 @@
 <template>
   <q-card>
-    <q-item>
 
-      <q-item-section>
-        <q-item-label class="text-grey-8 text-weight-bold" :style="[data.PNL<0 ? {'color': 'red !important'}:'']">{{ name }}</q-item-label>
-      </q-item-section>
+    <q-card-section horizontal class="bg-grey-2 text-grey-8">
+        <q-item class="full-width">
 
-      <q-item-section side>
-        <q-item-label class="text-grey-8">
-          <a ref="link" :href="baseURL+'/'+name+constants.STATS_FILE" target="_blank" style="text-decoration: none;"><!--{{ index }} {{ backup }}--> <q-icon name="insights" color="secondary" size="20px"/></a>
-          <q-tooltip>
-            Statistiche
-          </q-tooltip>
-        </q-item-label>
+          <q-item-section>
+            <q-item-label class="text-grey-8 text-weight-bold" :style="[data.PNL<0 ? {'color': 'red !important'}:'']">{{ name }}</q-item-label>
+          </q-item-section>
 
-      </q-item-section>
-    </q-item>
+          <q-item-section side>
+            <q-item-label class="text-grey-8">
+              <!-- :href="baseURL+'/'+name+constants.STATS_FILE" target="_blank" -->
+              <q-btn @click="$emit('sourceUrl', baseURL+'/'+name+constants.STATS_FILE)" flat round color="secondary" icon="insights" size="sm"/>
+              <q-tooltip>
+                Statistiche
+              </q-tooltip>
+            </q-item-label>
 
-    <q-separator></q-separator>
+          </q-item-section>
+
+        </q-item>
+
+    </q-card-section>
+
+    <q-separator />
 
     <q-card-section>
 
@@ -141,6 +147,16 @@ import { defineComponent, ref, onMounted, onUpdated } from 'vue'
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
 
+function convertIntObj(obj) {
+  const res = {}
+  for (const key in obj) {
+    const parsed = parseFloat(obj[key], 10);
+    res[key] = isNaN(obj[key]) ? obj[key] : parsed;
+  }
+  //console.log("parsed res:", res)
+  return res;
+}
+
 export default defineComponent({
   name: "TickerCard",
   props: {
@@ -183,7 +199,10 @@ export default defineComponent({
     function loadData() {
       api.get(baseURL.value+'/'+props.name+constants.API_TICKER_DATA_FILE).then( (response) => {
         //https://stackoverflow.com/questions/63559228/how-to-access-an-object-without-knowing-its-name
-        data.value = response.data[Object.keys(response.data)[0]]
+        let res = response.data[Object.keys(response.data)[0]]
+        //console.log(props.name + "data", res)
+        //data.value = convertIntObj(res)
+        data.value = res
       }).catch( (e) => {
         console.log(e)
         handleUnexpectedError(e)
