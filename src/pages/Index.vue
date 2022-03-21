@@ -58,14 +58,13 @@
         </template>
       </q-splitter>
 
-
           <div class="row q-col-gutter-lg q-pa-md mobile-only">
             <div :class="tickerClass" v-for="(folder,index) in folders">
               <ticker-card @source-url="(url) => source = url" :name="folder.name" :index="index" :folder="backupPath"/>
             </div>
           </div>
 
-          <q-dialog v-model="statsDialogEnable" persistent maximized transition-show="scale" transition-hide="scale" class="mobile-only">
+          <q-dialog v-model="statsDialogEnable" persistent maximized transition-show="scale" transition-hide="scale" class="mobile-only" @hide="resetSource()">
             <q-card flat>
 
               <q-card-actions align="right" class="bg-white text-teal">
@@ -81,7 +80,6 @@
             </q-card>
 
           </q-dialog>
-
 
     </q-card>
 
@@ -162,12 +160,14 @@ export default defineComponent({
     const errorText = ref('')
 
     watch(source, async (newSource, oldSource) => {
-      if(!newSource || newSource != '' || newSource != '#') {
+      if(newSource.length > 1 && Platform.is.mobile) {
         statsDialogEnable.value = true
-      } else {
-        statsDialogEnable.value = false
       }
     })
+
+    function resetSource() {
+      source.value = ''
+    }
 
     function setDateNow() {
       dateValue.value = setDateNowFormatted()
@@ -230,7 +230,8 @@ export default defineComponent({
       splitterDisable,
       source,
       tickerClass,
-      statsDialogEnable
+      statsDialogEnable,
+      resetSource
     }
   }
 })
