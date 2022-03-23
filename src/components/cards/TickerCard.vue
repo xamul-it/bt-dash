@@ -33,8 +33,6 @@
 
             </q-item-label>
 
-
-
           </q-item-section>
 
         </q-item>
@@ -45,9 +43,9 @@
 
     <q-card-section>
 
-      <div class="q-pa-sm text-grey-8">
+      <div class="q-pa-xs text-grey-8">
 
-        <q-item-label>
+        <q-item-label class="text-no-wrap">
           <!-- q-btn size="sm" flat round icon="date_range" class="bg-indigo-7 text-white" title="Date range"/ -->
           <q-icon name="date_range" color="blue" size="20px"/>
           {{data.fromdate}}
@@ -60,7 +58,7 @@
 
       </div>
 
-      <div class="q-pa-sm row">
+      <div class="q-pa-xs row">
 
          <div class="text-grey-8 col">
 
@@ -87,7 +85,7 @@
         </div>
       </div>
 
-      <div class="q-pa-sm row">
+      <div class="q-pa-xs row">
 
         <div class="text-grey-8 col">
 
@@ -114,7 +112,7 @@
         </div>
 
       </div>
-      <div class="q-pa-sm row">
+      <div class="q-pa-xs row">
 
         <div class="text-grey-8 col">
 
@@ -153,8 +151,6 @@
           </q-card-section>
         </q-card>
       </q-expansion-item -->
-
-
 
     </q-card-section>
   </q-card>
@@ -256,4 +252,3 @@ export default defineComponent({
 </style>
 <style scoped>
 </style>
-
