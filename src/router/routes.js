@@ -5,6 +5,12 @@ const routes = [
     component: () => import('layouts/MainLayout.vue'),
     children: [
       { path: '', component: () => import('pages/Index.vue') },
+
+      { path: '/orders', component: () => import('pages/Orders.vue')},
+      { path: '/positions', component: () => import('pages/Positions.vue')},
+      { path: '/today', component: () => import('pages/Today.vue')},
+
+
       { path: '/Dashboard', component: () => import('pages/Dashboard.vue')},
       { path: '/Dashboard2', component: () => import('pages/Dashboard2.vue')},
       { path: '/Cards', component: () => import('pages/Cards.vue')},
