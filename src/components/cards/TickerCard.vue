@@ -25,7 +25,7 @@
                 </q-tooltip>
               </q-btn>
 
-              <q-btn @click="$emit('sourceUrl', baseURL+'/'+name+constants.STATS_FILE)" flat round color="primary" icon="insights" size="sm">
+              <q-btn @click="$emit('sourceUrl', statsURL)" flat round color="primary" icon="insights" size="sm">
                 <q-tooltip>
                   Statistiche
                 </q-tooltip>
@@ -117,8 +117,8 @@
         <div class="text-grey-8 col">
 
           <q-item-label>
-            <q-icon name="candlestick_chart" color="gray" size="20px"/>
-            <span :style="[data.trades<0 ? {'color': 'red'}:'']">{{$filters.floatFormat(data.trades,0)}}</span>
+            <q-icon name="candlestick_chart" color="gray" size="20px" class="cursor-pointer" @click="$emit('sourceUrl', detailsURL)"/>
+            <span :style="[data.trades<0 ? {'color': 'red'}:'']" class="cursor-pointer" @click="$emit('sourceUrl', detailsURL)">{{$filters.floatFormat(data.trades,0)}}</span>
             <q-tooltip>
               Trades
             </q-tooltip>
@@ -140,17 +140,6 @@
          </div>
 
       </div>
-
-      <!-- q-expansion-item expand-separator dense dense-toggle :header-style="{ paddingTop: '0px', paddingBottom: '0px' }" :header-class="{ 'expansion-header': true }">
-        <q-tooltip>
-            Dati
-          </q-tooltip>
-        <q-card>
-          <q-card-section>
-            <pre class="text-grey-8">{{data}}</pre>
-          </q-card-section>
-        </q-card>
-      </q-expansion-item -->
 
     </q-card-section>
   </q-card>
@@ -186,17 +175,22 @@ export default defineComponent({
     }
   },
   setup(props) {
-    const link = ref(null)
     const data = ref([])
     const baseURL = ref(constants.API_BASE_FOLDER)
+    const statsURL = ref('')
+    const detailsURL = ref('')
 
     function getTickerData () {
       if(!props.error) {
         if(props.folder!='') {
           baseURL.value = constants.API_BACKUP_FOLDER + '/' + props.folder + constants.API_BACKUP_BASE_FOLDER
+          statsURL.value = baseURL.value +'/'+ props.name + constants.STATS_FILE
+          detailsURL.value = constants.PAGE_DETAILS+'/'+props.name + '/' + props.folder
           loadData()
         } else {
           baseURL.value = constants.API_BASE_FOLDER
+          statsURL.value = baseURL.value +'/'+ props.name + constants.STATS_FILE
+          detailsURL.value = constants.PAGE_DETAILS+'/'+props.name
           loadData()
         }
       }
@@ -207,18 +201,15 @@ export default defineComponent({
     }
 
     function handleUnexpectedError(e) {
-      link.value.setAttribute('href','#')
+      console.log(e, baseURL, statsURL, detailsURL)
     }
 
     function loadData() {
       api.get(baseURL.value+'/'+props.name+constants.API_TICKER_DATA_FILE).then( (response) => {
         //https://stackoverflow.com/questions/63559228/how-to-access-an-object-without-knowing-its-name
         let res = response.data[Object.keys(response.data)[0]]
-        //console.log(props.name + "data", res)
-        //data.value = convertIntObj(res)
         data.value = res
       }).catch( (e) => {
-        console.log(e)
         handleUnexpectedError(e)
       })
     }
@@ -235,9 +226,10 @@ export default defineComponent({
     })
 
     return {
-      link,
       data,
       baseURL,
+      statsURL,
+      detailsURL,
       constants
     }
   },

@@ -10,9 +10,10 @@ const constants = {
   API_ORDERS_FILE: '/orders.json',
   API_POSITIONS_FILE: '/positions.json',
   API_TODAY_FILE: '/today.json',
+  PAGE_DETAILS: '/details',
 
   //Locale
-  APP_LOCALE: 'it-IT',
+  APP_LOCALE: 'en-US',
 
 }
 
