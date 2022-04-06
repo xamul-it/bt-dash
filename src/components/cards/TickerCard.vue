@@ -185,12 +185,12 @@ export default defineComponent({
         if(props.folder!='') {
           baseURL.value = constants.API_BACKUP_FOLDER + '/' + props.folder + constants.API_BACKUP_BASE_FOLDER
           statsURL.value = baseURL.value +'/'+ props.name + constants.STATS_FILE
-          detailsURL.value = constants.PAGE_DETAILS+'/'+props.name + '/' + props.folder
+          detailsURL.value = '/#'+constants.PAGE_DETAILS+'/'+props.name + '/' + props.folder
           loadData()
         } else {
           baseURL.value = constants.API_BASE_FOLDER
           statsURL.value = baseURL.value +'/'+ props.name + constants.STATS_FILE
-          detailsURL.value = constants.PAGE_DETAILS+'/'+props.name
+          detailsURL.value = '/#'+constants.PAGE_DETAILS+'/'+props.name
           loadData()
         }
       }
