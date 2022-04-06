@@ -20,7 +20,7 @@ import { constants } from 'boot/constants'
 import { useRoute } from 'vue-router'
 
 export default defineComponent({
-  name: "Orders",
+  name: "TickerDetails",
   components: {
     TableDataApi: defineAsyncComponent(() => import('components/tables/TableDataApi')),
   },
@@ -30,7 +30,7 @@ export default defineComponent({
 
     const tickerPath = ref('')
     onMounted(() => {
-      console.log('route', route.params)
+      console.log('route.params', route.params)
       if(route.params.date) {
         tickerPath.value = constants.API_BACKUP_FOLDER+'/'+route.params.date+constants.API_BACKUP_BASE_FOLDER+'/'+route.params.ticker
       } else {

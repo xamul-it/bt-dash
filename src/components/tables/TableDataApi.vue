@@ -3,7 +3,7 @@
     <q-card-section class="full-width q-pa-none">
       <q-table
         :title="tableTitle"
-        :rows="today"
+        :rows="rows"
         :filter="filter"
         :sort-method = "customSort"
         :loading = "loading"
@@ -66,7 +66,7 @@ export default defineComponent({
   components: {
   },
   setup(props) {
-    const today = ref([])
+    const rows = ref([])
     const columns = ref([])
 
     const loading = ref(false)
@@ -85,7 +85,7 @@ export default defineComponent({
         for(let i in props.jsonDataPath) {
           rd = rd[props.jsonDataPath[i]]
         }
-        today.value = prepareTableData(rd)
+        rows.value = prepareTableData(rd)
       })
       .catch( (e) => {
         handleUnexpectedError(e)
@@ -103,20 +103,24 @@ export default defineComponent({
       let dataRows = []
       let keys = Object.keys(data)
 
-      //console.log('prepareTableData', keys)
+      console.log('keys', keys)
 
       for(let ki in keys) {
         for(let i in data[keys[ki]]) {
+
           let dataRow = []
-          if( typeof data[keys[ki]][i] === 'object' )
+          if( typeof data[keys[ki]][i] === 'object' ) {
             dataRow = Object.assign({"name":keys[ki]}, data[keys[ki]][i])
-          else
+            dataRows.push(dataRow)
+          } else {
             dataRow = Object.assign({"name":keys[ki]}, data[keys[ki]])
-          dataRows.push(dataRow)
+            dataRows.push(dataRow)
+            break;
+          }
         }
       }
 
-      //console.log('Rows', dataRows)
+      console.log('Rows', dataRows)
 
       //COLUMNS
       let dataColumns = []
@@ -186,12 +190,12 @@ export default defineComponent({
     }
 
     onMounted(() => {
-      getLatestData()
       console.log(props.apiURL, props.jsonDataPath)
+      getLatestData()
     })
 
     return {
-      today,
+      rows,
       columns,
       loading,
       filter: ref(''),
