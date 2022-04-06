@@ -1,0 +1,64 @@
+
+ Dev mode.......... spa
+ Pkg quasar........ v2.5.5
+ Pkg @quasar/app... v3.3.3
+ Pkg webpack....... v5
+ Debugging......... enabled
+
+ Configured browser support (>= 89.32% of global marketshare):
+ · Chrome for Android >= 98
+ · Firefox for Android >= 96
+ · Android >= 98
+ · Chrome >= 89
+ · Edge >= 95
+ · Firefox >= 88
+ · iOS >= 12.0-12.1
+ · Opera >= 79
+ · Safari >= 13
+
+ App • Chaining "UI" Webpack config
+ App •  WAIT  • Compiling of "UI" in progress...
+ App •  DONE  • "UI" compiled with success • 27371ms
+
+ App •  READY  • Compiled: "UI"
+
+ » App dir........... /home/backtrader/bt-dash
+ » App URL........... http://localhost:8080/dash/
+                      http://213.171.162.127:8080/dash/
+ » Dev mode.......... spa
+ » Pkg quasar........ v2.5.5
+ » Pkg @quasar/app... v3.3.3
+ » Transpiled JS..... yes (Babel)
+
+
+ Dev mode.......... spa
+ Pkg quasar........ v2.5.5
+ Pkg @quasar/app... v3.3.3
+ Pkg webpack....... v5
+ Debugging......... enabled
+
+ Configured browser support (>= 89.32% of global marketshare):
+ · Chrome for Android >= 98
+ · Firefox for Android >= 96
+ · Android >= 98
+ · Chrome >= 89
+ · Edge >= 95
+ · Firefox >= 88
+ · iOS >= 12.0-12.1
+ · Opera >= 79
+ · Safari >= 13
+
+ App • Chaining "UI" Webpack config
+ App •  WAIT  • Compiling of "UI" in progress...
+ App •  DONE  • "UI" compiled with success • 26546ms
+
+ App •  READY  • Compiled: "UI"
+
+ » App dir........... /home/backtrader/bt-dash
+ » App URL........... http://localhost:8080/dash/
+                      http://213.171.162.127:8080/dash/
+ » Dev mode.......... spa
+ » Pkg quasar........ v2.5.5
+ » Pkg @quasar/app... v3.3.3
+ » Transpiled JS..... yes (Babel)
+
