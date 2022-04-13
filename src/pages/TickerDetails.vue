@@ -9,13 +9,14 @@
 
       <table-data-api tableTitle="Positions" :apiURL="tickerPath+constants.API_POSITIONS_FILE" :jsonDataPath="['data']"></table-data-api>
 
+
     </div>
 
   </div>
 </template>
 
 <script>
-import { defineComponent, defineAsyncComponent, onMounted, ref } from 'vue'
+import { defineComponent, defineAsyncComponent, onMounted, ref, toRefs, reactive, computed } from 'vue'
 import { constants } from 'boot/constants'
 import { useRoute } from 'vue-router'
 
@@ -27,19 +28,21 @@ export default defineComponent({
 
   setup() {
     const route = useRoute()
+    const routeParamsRef = toRefs(route).params
 
-    const tickerPath = ref('')
-    onMounted(() => {
-      console.log('route.params', route.params)
-      if(route.params.date) {
-        tickerPath.value = constants.API_BACKUP_FOLDER+'/'+route.params.date+constants.API_BACKUP_BASE_FOLDER+'/'+route.params.ticker
-      } else {
-        tickerPath.value = constants.API_BASE_FOLDER+'/'+route.params.ticker
+    const tickerPath = computed(() => {
+        if(routeParamsRef.value.date) {
+          return constants.API_BACKUP_FOLDER+'/'+routeParamsRef.value.date+constants.API_BACKUP_BASE_FOLDER+'/'+routeParamsRef.value.ticker
+        } else {
+          return constants.API_BASE_FOLDER+'/'+routeParamsRef.value.ticker
+        }
       }
-    })
+    )
+
     return {
       constants,
-      tickerPath
+      tickerPath,
+      routeParamsRef
     }
   }
 })

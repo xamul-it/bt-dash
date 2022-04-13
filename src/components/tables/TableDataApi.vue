@@ -1,5 +1,6 @@
 <template>
-  <q-card class="full-width q-ma-md q-pa-none">
+
+  <q-card v-if="rows.length>0" class="full-width q-ma-md q-pa-none">
     <q-card-section class="full-width q-pa-none">
       <q-table
         :title="tableTitle"
@@ -36,10 +37,11 @@
       </q-table>
     </q-card-section>
   </q-card>
+
 </template>
 
 <script>
-import { defineComponent, defineAsyncComponent, ref, onMounted, } from 'vue'
+import { defineComponent, toRefs, ref, watch, onMounted, } from 'vue'
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
 import { date } from 'quasar'
@@ -76,9 +78,12 @@ export default defineComponent({
     const isError = ref(false)
     const errorText = ref('')
 
+    watch(() => props.apiURL, (newApiURL, prevApiURL) => {
+      getLatestData()
+    })
+
     function getLatestData (path = constants.API_BASE_FOLDER) {
       loading.value = true
-      //api.get(path+constants.API_TODAY_FILE).then((response) => {
       api.get(props.apiURL).then((response) => {
 
         let rd = response
@@ -103,7 +108,7 @@ export default defineComponent({
       let dataRows = []
       let keys = Object.keys(data)
 
-      console.log('keys', keys)
+      //console.log('keys', keys)
 
       for(let ki in keys) {
         for(let i in data[keys[ki]]) {
@@ -120,7 +125,7 @@ export default defineComponent({
         }
       }
 
-      console.log('Rows', dataRows)
+      //console.log('Rows', dataRows)
 
       //COLUMNS
       let dataColumns = []
@@ -180,11 +185,13 @@ export default defineComponent({
     }
 
     function handleUnexpectedError(e) {
+      rows.value = []
       errorText.value = e.message
       isError.value = true
     }
 
     function reset() {
+      rows.value = []
       loading.value = false
       getLatestData()
     }
