@@ -117,8 +117,8 @@
         <div class="text-grey-8 col">
 
           <q-item-label>
-            <q-icon name="candlestick_chart" color="gray" size="20px" class="cursor-pointer" @click="$emit('sourceUrl', detailsURL)"/>
-            <span :style="[data.trades<0 ? {'color': 'red'}:'']" class="cursor-pointer" @click="$emit('sourceUrl', detailsURL)">{{$filters.floatFormat(data.trades,0)}}</span>
+            <q-icon name="candlestick_chart" color="gray" size="20px" :style="[data.trades<0 ? {'color': 'red'}:'', (data.trades>0 && data.today==true) ? {'color': 'green', 'font-weight': 'bold'}:'']" class="cursor-pointer" @click="$emit('sourceUrl', detailsURL)"/>
+            <span :style="[data.trades<0 ? {'color': 'red'}:'', (data.trades>0 && data.today==true) ? {'color': 'green', 'font-weight': 'bold'}:'']" class="cursor-pointer" @click="$emit('sourceUrl', detailsURL)">{{$filters.floatFormat(data.trades,0)}}</span>
             <q-tooltip>
               Trades
             </q-tooltip>
@@ -209,18 +209,19 @@ export default defineComponent({
         //https://stackoverflow.com/questions/63559228/how-to-access-an-object-without-knowing-its-name
         let res = response.data[Object.keys(response.data)[0]]
         data.value = res
+        //console.log('loadData', props.name, response, response.data, Object.keys(response.data), res)
       }).catch( (e) => {
         handleUnexpectedError(e)
       })
     }
 
     onMounted(() => {
-      console.log('TickerCard mounted', props)
+      //console.log('TickerCard mounted', props)
       getTickerData()
     })
 
     onUpdated(() => {
-      console.log('TickerCard updated', props)
+      //console.log('TickerCard updated', props)
       resetData()
       getTickerData()
     })

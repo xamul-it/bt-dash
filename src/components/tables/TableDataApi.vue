@@ -1,9 +1,10 @@
 <template>
-  <q-card class="full-width q-ma-md q-pa-none">
+
+  <q-card v-if="rows.length>0" class="full-width q-ma-md q-pa-none">
     <q-card-section class="full-width q-pa-none">
       <q-table
         :title="tableTitle"
-        :rows="today"
+        :rows="rows"
         :filter="filter"
         :sort-method = "customSort"
         :loading = "loading"
@@ -36,10 +37,11 @@
       </q-table>
     </q-card-section>
   </q-card>
+
 </template>
 
 <script>
-import { defineComponent, defineAsyncComponent, ref, onMounted, } from 'vue'
+import { defineComponent, toRefs, ref, watch, onMounted, } from 'vue'
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
 import { date } from 'quasar'
@@ -66,7 +68,7 @@ export default defineComponent({
   components: {
   },
   setup(props) {
-    const today = ref([])
+    const rows = ref([])
     const columns = ref([])
 
     const loading = ref(false)
@@ -76,16 +78,19 @@ export default defineComponent({
     const isError = ref(false)
     const errorText = ref('')
 
+    watch(() => props.apiURL, (newApiURL, prevApiURL) => {
+      getLatestData()
+    })
+
     function getLatestData (path = constants.API_BASE_FOLDER) {
       loading.value = true
-      //api.get(path+constants.API_TODAY_FILE).then((response) => {
       api.get(props.apiURL).then((response) => {
 
         let rd = response
         for(let i in props.jsonDataPath) {
           rd = rd[props.jsonDataPath[i]]
         }
-        today.value = prepareTableData(rd)
+        rows.value = prepareTableData(rd)
       })
       .catch( (e) => {
         handleUnexpectedError(e)
@@ -103,16 +108,20 @@ export default defineComponent({
       let dataRows = []
       let keys = Object.keys(data)
 
-      //console.log('prepareTableData', keys)
+      //console.log('keys', keys)
 
       for(let ki in keys) {
         for(let i in data[keys[ki]]) {
+
           let dataRow = []
-          if( typeof data[keys[ki]][i] === 'object' )
+          if( typeof data[keys[ki]][i] === 'object' ) {
             dataRow = Object.assign({"name":keys[ki]}, data[keys[ki]][i])
-          else
+            dataRows.push(dataRow)
+          } else {
             dataRow = Object.assign({"name":keys[ki]}, data[keys[ki]])
-          dataRows.push(dataRow)
+            dataRows.push(dataRow)
+            break;
+          }
         }
       }
 
@@ -176,22 +185,24 @@ export default defineComponent({
     }
 
     function handleUnexpectedError(e) {
+      rows.value = []
       errorText.value = e.message
       isError.value = true
     }
 
     function reset() {
+      rows.value = []
       loading.value = false
       getLatestData()
     }
 
     onMounted(() => {
-      getLatestData()
       console.log(props.apiURL, props.jsonDataPath)
+      getLatestData()
     })
 
     return {
-      today,
+      rows,
       columns,
       loading,
       filter: ref(''),
