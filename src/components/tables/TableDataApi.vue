@@ -14,6 +14,12 @@
         bordered
       >
 
+        <template v-slot:body-cell-name="props">
+          <q-td :props="props">
+            <a :href="baselink+'/'+props.row.name" target="_blank">{{props.row.name}}</a>
+          </q-td>
+        </template>
+
         <template v-slot:top-right>
           <q-input v-if="show_filter" filled borderless dense debounce="300" v-model="filter" placeholder="Search">
             <template v-slot:append>
@@ -68,6 +74,7 @@ export default defineComponent({
   components: {
   },
   setup(props) {
+    const baselink = "https://it.finance.yahoo.com/quote/";
     const rows = ref([])
     const columns = ref([])
 
@@ -222,6 +229,7 @@ export default defineComponent({
     })
 
     return {
+      baselink,
       rows,
       columns,
       loading,
