@@ -78,6 +78,26 @@ export default defineComponent({
     const isError = ref(false)
     const errorText = ref('')
 
+    const getType = (value) => Object.prototype.toString.call(value).slice(8, -1).toLowerCase()
+
+    const flattenItem = (ob) => {
+      let result = {};
+      for (const i in ob) {
+        if ((typeof ob[i]) === 'object' && !Array.isArray(ob[i])) {
+          const temp = flattenItem(ob[i]);
+          for (const j in temp) {
+            if(result[i] == null)
+              result[i] = temp[j];
+            else
+              result[i] += ("\n"+temp[j]);
+          }
+        } else {
+          result[i] = ob[i];
+        }
+      }
+      return result;
+    }
+
     watch(() => props.apiURL, (newApiURL, prevApiURL) => {
       getLatestData()
     })
@@ -115,7 +135,7 @@ export default defineComponent({
 
           let dataRow = []
           if( typeof data[keys[ki]][i] === 'object' ) {
-            dataRow = Object.assign({"name":keys[ki]}, data[keys[ki]][i])
+            dataRow = Object.assign({"name":keys[ki]}, flattenItem(data[keys[ki]][i]))
             dataRows.push(dataRow)
           } else {
             dataRow = Object.assign({"name":keys[ki]}, data[keys[ki]])
