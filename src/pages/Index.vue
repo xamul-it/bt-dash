@@ -6,11 +6,12 @@
         <q-input filled v-model="dateValue" mask="date" :rules="['date']">
           <template v-slot:append>
             <q-icon name="event" class="cursor-pointer">
-              <q-popup-proxy ref="qDateProxy" cover transition-show="scale" transition-hide="scale">
+              <q-popup-proxy ref="qDateProxyRef" cover transition-show="scale" transition-hide="scale">
                 <q-date v-model="dateValue" :options="dateFilter"
                     navigation-min-year-month="2021/12"
                     minimal
-                    today-btn>
+                    today-btn
+                    @update:model-value="onDateUpdate">
                   <div class="row items-center justify-end">
                     <q-btn v-close-popup :label="$t('close')" color="primary" flat />
                   </div>
@@ -149,6 +150,7 @@ export default defineComponent({
       else
         return 50
     }) //Read only???!!!
+    const qDateProxyRef = ref(null)
     const source = ref('')
     const loading = ref(false)
     const folders = ref([])
@@ -211,6 +213,11 @@ export default defineComponent({
       getLatestData()
     }
 
+    function onDateUpdate(val) {
+      qDateProxyRef.value.hide()
+      getBackupData()
+    }
+
     onMounted(() => {
       getLatestData()
       setDateNow()
@@ -231,7 +238,9 @@ export default defineComponent({
       source,
       tickerClass,
       statsDialogEnable,
-      resetSource
+      resetSource,
+      qDateProxyRef,
+      onDateUpdate
     }
   }
 })
