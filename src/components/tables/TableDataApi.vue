@@ -8,10 +8,10 @@
           <q-td :props="props">
             <span class="q-pa-xs q-gutter-xs">
               {{ props.row.name }}
-              <a :href="yflink + '/' + props.row.name" target="_blank">
+              <a :href="yflink + '/' + props.row.name+ '/chart'" target="yf" >
                 <q-btn flat round icon="fab fa-yahoo" class="bg-yellow text-black" size="6px" />
               </a>
-              <a :href="tvlink + props.row.name.slice(0, -3)" target="_blank">
+              <a :href="tvlink + props.row.name.slice(0, -3)" target="tv">
                 <q-btn flat round icon="fab fa-trade-federation" class="bg-black text-white" size="6px" />
               </a>
             </span>
