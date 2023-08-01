@@ -1,40 +1,38 @@
 <template>
-
-  <q-card v-if="rows.length>0" class="full-width q-ma-md q-pa-none">
+  <q-card v-if="rows.length > 0" class="full-width q-ma-md q-pa-none">
     <q-card-section class="full-width q-pa-none">
-      <q-table
-        :title="tableTitle"
-        :rows="rows"
-        :filter="filter"
-        :sort-method = "customSort"
-        :loading = "loading"
-        separator = "vertical"
-        :pagination="initialPagination"
-        flat
-        bordered
-      >
+      <q-table :title="tableTitle" :rows="rows" :filter="filter" :sort-method="customSort" :loading="loading"
+        separator="vertical" :pagination="initialPagination" flat bordered>
 
         <template v-slot:body-cell-name="props">
           <q-td :props="props">
-            <a :href="baselink+'/'+props.row.name" target="_blank">{{props.row.name}}</a>
+            <span class="q-pa-xs q-gutter-xs">
+              {{ props.row.name }}
+              <a :href="yflink + '/' + props.row.name" target="_blank">
+                <q-btn flat round icon="fab fa-yahoo" class="bg-yellow text-black" size="6px" />
+              </a>
+              <a :href="tvlink + props.row.name.slice(0, -3)" target="_blank">
+                <q-btn flat round icon="fab fa-trade-federation" class="bg-black text-white" size="6px" />
+              </a>
+            </span>
           </q-td>
         </template>
 
         <template v-slot:top-right>
           <q-input v-if="show_filter" filled borderless dense debounce="300" v-model="filter" placeholder="Search">
             <template v-slot:append>
-              <q-icon name="search"/>
+              <q-icon name="search" />
             </template>
           </q-input>
 
-          <q-btn class="q-ml-sm" icon="filter_list" @click="show_filter=!show_filter" flat/>
+          <q-btn class="q-ml-sm" icon="filter_list" @click="show_filter = !show_filter" flat />
         </template>
 
         <template v-slot:no-data="{ icon, message, filter }">
           <div class="full-width row flex-center text-accent q-gutter-sm">
             <q-icon size="2em" name="sentiment_dissatisfied" />
             <span>
-              Well this is sad... {{ isError? errorText:message }}
+              Well this is sad... {{ isError ? errorText : message }}
             </span>
             <q-icon size="2em" :name="filter ? 'filter_b_and_w' : icon" />
           </div>
@@ -43,7 +41,6 @@
       </q-table>
     </q-card-section>
   </q-card>
-
 </template>
 
 <script>
@@ -74,7 +71,8 @@ export default defineComponent({
   components: {
   },
   setup(props) {
-    const baselink = "https://it.finance.yahoo.com/quote/";
+    const yflink = "https://it.finance.yahoo.com/quote/";
+    const tvlink = "https://it.tradingview.com/chart/?symbol=MIL%3A";
     const rows = ref([])
     const columns = ref([])
 
@@ -93,10 +91,10 @@ export default defineComponent({
         if ((typeof ob[i]) === 'object' && !Array.isArray(ob[i])) {
           const temp = flattenItem(ob[i]);
           for (const j in temp) {
-            if(result[i] == null)
+            if (result[i] == null)
               result[i] = temp[j];
             else
-              result[i] += ("\n"+temp[j]);
+              result[i] += ("\n" + temp[j]);
           }
         } else {
           result[i] = ob[i];
@@ -109,27 +107,27 @@ export default defineComponent({
       getLatestData()
     })
 
-    function getLatestData (path = constants.API_BASE_FOLDER) {
+    function getLatestData(path = constants.API_BASE_FOLDER) {
       loading.value = true
       api.get(props.apiURL).then((response) => {
 
         let rd = response
-        for(let i in props.jsonDataPath) {
+        for (let i in props.jsonDataPath) {
           rd = rd[props.jsonDataPath[i]]
         }
         rows.value = prepareTableData(rd)
       })
-      .catch( (e) => {
-        handleUnexpectedError(e)
-      })
-      .finally(()=> {
-        loading.value = false
-      })
+        .catch((e) => {
+          handleUnexpectedError(e)
+        })
+        .finally(() => {
+          loading.value = false
+        })
     }
 
     function prepareTableData(data) {
-      if(!data) {
-        throw {message: 'No data in '+ props.jsonDataPath + ' path'}
+      if (!data) {
+        throw { message: 'No data in ' + props.jsonDataPath + ' path' }
       }
       //ROWS
       let dataRows = []
@@ -137,15 +135,15 @@ export default defineComponent({
 
       //console.log('keys', keys)
 
-      for(let ki in keys) {
-        for(let i in data[keys[ki]]) {
+      for (let ki in keys) {
+        for (let i in data[keys[ki]]) {
 
           let dataRow = []
-          if( typeof data[keys[ki]][i] === 'object' ) {
-            dataRow = Object.assign({"name":keys[ki]}, flattenItem(data[keys[ki]][i]))
+          if (typeof data[keys[ki]][i] === 'object') {
+            dataRow = Object.assign({ "name": keys[ki] }, flattenItem(data[keys[ki]][i]))
             dataRows.push(dataRow)
           } else {
-            dataRow = Object.assign({"name":keys[ki]}, data[keys[ki]])
+            dataRow = Object.assign({ "name": keys[ki] }, data[keys[ki]])
             dataRows.push(dataRow)
             break;
           }
@@ -157,7 +155,7 @@ export default defineComponent({
       //COLUMNS
       let dataColumns = []
       keys = Object.keys(dataRows[0])
-      for(let ki in keys) {
+      for (let ki in keys) {
         let column = {}
 
         column.name = keys[ki]
@@ -190,18 +188,18 @@ export default defineComponent({
 
           if (sortBy === 'name' || sortBy === 'ordertype') {
             // string sort
-            return x[ sortBy ] > y[ sortBy ] ? 1 : x[ sortBy ] < y[ sortBy ] ? -1 : 0
+            return x[sortBy] > y[sortBy] ? 1 : x[sortBy] < y[sortBy] ? -1 : 0
           } else if (sortBy === 'created' || sortBy === 'date') {
             //date sort
             let dateFormat = 'DD-MM-YYYY'
-            let xDate =  date.extractDate(x[ sortBy ], dateFormat)
-            let yDate =  date.extractDate(y[ sortBy ], dateFormat)
+            let xDate = date.extractDate(x[sortBy], dateFormat)
+            let yDate = date.extractDate(y[sortBy], dateFormat)
             return date.getDateDiff(xDate, yDate)
           } else {
             // numeric sort
-            let xN = parseFloat(x[ sortBy ])
+            let xN = parseFloat(x[sortBy])
             xN = Number.isNaN(xN) ? Number.MIN_VALUE : xN
-            let yN = parseFloat(y[ sortBy ])
+            let yN = parseFloat(y[sortBy])
             yN = Number.isNaN(yN) ? Number.MIN_VALUE : yN
             return xN - yN
           }
@@ -229,7 +227,8 @@ export default defineComponent({
     })
 
     return {
-      baselink,
+      yflink,
+      tvlink,
       rows,
       columns,
       loading,
@@ -247,5 +246,5 @@ export default defineComponent({
       }
     }
   }
- })
+})
 </script>
