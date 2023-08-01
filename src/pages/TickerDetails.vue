@@ -3,12 +3,11 @@
 
     <div class="row q-col-gutter-md">
 
-      <table-data-api tableTitle="Today" :apiURL="tickerPath+constants.API_TODAY_FILE" :jsonDataPath="['data','today']"></table-data-api>
-
       <table-data-api tableTitle="Orders" :apiURL="tickerPath+constants.API_ORDERS_FILE" :jsonDataPath="['data']"></table-data-api>
 
       <table-data-api tableTitle="Positions" :apiURL="tickerPath+constants.API_POSITIONS_FILE" :jsonDataPath="['data']"></table-data-api>
 
+      <table-data-api tableTitle="Today" :apiURL="tickerPath+constants.API_TODAY_FILE" :jsonDataPath="['data']"></table-data-api>
 
     </div>
 
