@@ -62,8 +62,12 @@
         <q-input v-if="form.tipoTickers === 'ticker'" label="Ticker" v-model="form.ticker" />
 
         <!-- tickers (testo, attivato se si sceglie 'free') -->
-        <q-input v-if="form.tipoTickers === 'free'" label="Tickers" type="text" v-model="form.tickers" />
+        <q-input v-if="form.tipoTickers === 'free'" label="Tickers" type="text" v-model="form.tickers" class="q-mb-md"/>
+        <div style="height: 20px;"></div>  <!-- Aggiungi uno spaziatore qui -->
 
+        <q-btn label="Invia" @click="inviaDati" color="primary" class="q-mb-lg" />
+        <q-toggle label="Debug Mode" v-model="form.debug" class="q-mb-lg"/>
+        
       </q-form>
     </q-card>
   </div>
@@ -75,20 +79,53 @@ import axios from 'axios'
 import { constants } from 'boot/constants'
 
 
+
 export default defineComponent({
   setup() {
     const today = new Date();
     const threeYearsAgo = new Date(new Date().setFullYear(today.getFullYear() - 3));
-
     const strategie = ref([]);
+    const tickerList = ref([]);
     const loading = ref(false);
     const error = ref(null);
-    
-    async function fetchStrategies() {
+
+    const tipoCommissioni = ref([
+      // Definisci le opzioni per la select 'Tipo Commissioni'
+      { label: 'Nessuna', value: 'none' },
+      { label: 'Fineco (2.75 + tobin)', value: 'fineco' },
+      { label: 'Fineco (2.75)', value: 'lfineco' },
+    ]);
+
+    const tipiTickers = ref([
+      { label: 'Lista', value: 'lista' },
+      { label: 'Ticker', value: 'ticker' },
+      { label: 'Free', value: 'free' },
+    ]);
+
+
+    async function inviaDati() {
+      try {
+        // sostituisci `axios` con il tuo metodo di chiamata API preferito
+        // per questo esempio, assumeremo che tu abbia configurato Axios globalmente
+        const response = await axios.post(`${constants.API_BASE_URL}/dyn/mn/main`, form.value);
+        $q.notify({ type: 'positive', message: 'Dati inviati con successo!' });
+      } catch (error) {
+        console.error('Errore nell\'invio dei dati:', error);
+        $q.notify({ type: 'negative', message: 'Errore nell\'invio dei dati.' });
+      }
+    }
+
+    async function fetchData() {
       loading.value = true;
       try {
         const response = await axios.get(`${constants.API_BASE_URL}/strategies/index.json`);
         strategie.value = response.data;
+        form.value.strategia = strategie.value[0]; 
+
+        const tl = await axios.get(`${constants.API_BASE_URL}/dyn/tk/options`);
+        tickerList.value = tl.data;
+        form.value.tickerList = tickerList.value[0]; 
+
       } catch (e) {
         error.value = e;
         console.error(error)
@@ -97,13 +134,8 @@ export default defineComponent({
       }
     }
 
-    fetchStrategies();
-    /*strategie.value=[
-      {'label': 'candle.Candle', 'value': 'candle.Candle'}, 
-    {'label': 'candle.CandleBS', 'value': 'candle.CandleBS'}, 
-    {'label': 'candle.CandleX2', 'value': 'candle.CandleX2'}, 
-    {'label': 'candle_old.ATRCandle', 'value': 'candle_old.ATRCandle'}];
-*/
+    fetchData();
+
     const form = ref({
       strategia: '',
       parametriStrategia: '',
@@ -111,29 +143,14 @@ export default defineComponent({
       a: today.toISOString().split('T')[0], // Formatta la data in formato YYYY-MM-DD
       cash: 200000,
       importoOperazioni: 10000,
-      tipoCommissioni: '',
-      tipoTickers: '',
+      tipoCommissioni: tipoCommissioni.value[1],
+      tipoTickers: tipiTickers.value[0].value,
       tickerList: '',
       ticker: '',
       tickers: '',
+      debug: false,
     });
 
-    const tipoCommissioni = [
-      // Definisci le opzioni per la select 'Tipo Commissioni'
-      { label: 'Nessuna', value: 'none' },
-      { label: 'Fineco (2.75 + tobin)', value: 'fineco' },
-      { label: 'Fineco (2.75)', value: 'lfineco' },
-    ];
-
-    const tipiTickers = [
-      { label: 'Lista', value: 'lista' },
-      { label: 'Ticker', value: 'ticker' },
-      { label: 'Free', value: 'free' },
-    ];
-
-    const tickerList = [
-      // Definisci le opzioni per la select 'Ticker List'
-    ];
 
     function formatCurrency(value) {
       const formatter = new Intl.NumberFormat('it-IT', { // 'it-IT' usa il punto per migliaia e virgola per decimali
@@ -163,6 +180,7 @@ export default defineComponent({
 
     return {
       form,
+      inviaDati,
       strategie,
       tipoCommissioni,
       tipiTickers,

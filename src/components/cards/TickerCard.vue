@@ -1,11 +1,11 @@
 <template>
-  <q-card>
+  <q-card class="q-ma-sm" style="width: 300px;" >
 
-    <q-card-section horizontal class="bg-grey-2 text-grey-8">
-        <q-item class="full-width">
+    <q-card-section horizontal class="bg-grey-2 text-grey-8" >
+        <q-item>
 
           <q-item-section>
-            <q-item-label class="text-grey-8 text-weight-bold" :style="[data.PNL<0 ? {'color': 'red !important'}:'']">{{ name }}</q-item-label>
+            <q-item-label class="text-grey-8 text-weight-bold" :style="[data.PNL<0 ? {'color': 'red !important'}:{'color': 'green !important'}]">{{ name }}</q-item-label>
           </q-item-section>
 
           <q-item-section side>
@@ -150,15 +150,6 @@ import { defineComponent, ref, onMounted, onUpdated } from 'vue'
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
 
-function convertIntObj(obj) {
-  const res = {}
-  for (const key in obj) {
-    const parsed = parseFloat(obj[key], 10);
-    res[key] = isNaN(obj[key]) ? obj[key] : parsed;
-  }
-  //console.log("parsed res:", res)
-  return res;
-}
 
 export default defineComponent({
   name: "TickerCard",
@@ -209,7 +200,8 @@ export default defineComponent({
         //https://stackoverflow.com/questions/63559228/how-to-access-an-object-without-knowing-its-name
         let res = response.data[Object.keys(response.data)[0]]
         data.value = res
-        //console.log('loadData', props.name, response, response.data, Object.keys(response.data), res)
+        // Emit event to notify tasks.actions
+        this.$emit('dataUpdated');
       }).catch( (e) => {
         handleUnexpectedError(e)
       })

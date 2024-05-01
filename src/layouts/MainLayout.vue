@@ -77,6 +77,7 @@
         <!-- Riga di separazione -->
         <q-separator />
         
+        <div v-if="false">
         <q-item to="/Dashboard" active-class="q-item-no-link-highlighting">
           <q-item-section avatar>
             <q-icon name="dashboard"/>
@@ -147,6 +148,7 @@
             <q-item-label>Pagination</q-item-label>
           </q-item-section>
         </q-item>
+      </div>
 
       </q-list>
     </q-drawer>
