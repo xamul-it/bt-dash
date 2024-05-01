@@ -7,11 +7,8 @@
           <template v-slot:append>
             <q-icon name="event" class="cursor-pointer">
               <q-popup-proxy ref="qDateProxyRef" cover transition-show="scale" transition-hide="scale">
-                <q-date v-model="dateValue" :options="dateFilter"
-                    navigation-min-year-month="2021/12"
-                    minimal
-                    today-btn
-                    @update:model-value="onDateUpdate">
+                <q-date v-model="dateValue" :options="dateFilter" navigation-min-year-month="2021/12" minimal today-btn
+                  @update:model-value="onDateUpdate">
                   <div class="row items-center justify-end">
                     <q-btn v-close-popup :label="$t('close')" color="primary" flat />
                   </div>
@@ -24,48 +21,52 @@
 
       <div class="q-pa-md" style="max-width: 300px">
         <q-btn outline color="primary" size="1.55em" @click="getBackupData()" :loading="loading">
-          <q-icon left size="1.0em" name="file_download"/>
-          <div>{{$t('load')}}</div>
+          <q-icon left size="1.0em" name="file_download" />
+          <div>{{ $t('load') }}</div>
         </q-btn>
       </div>
 
       <div class="q-pa-md" style="max-width: 300px">
         <q-btn outline color="secondary" size="1.55em" @click="reset()">
-          <q-icon left size="1.0em" name="restart_alt"/>
-          <div>{{$t('reset')}}</div>
+          <q-icon left size="1.0em" name="restart_alt" />
+          <div>{{ $t('reset') }}</div>
         </q-btn>
       </div>
 
     </div>
 
     <div>
-    <q-card flat bordered>
+      <q-card flat bordered>
 
-      <q-splitter v-model="splitterModel" :limits="[50, 100]" :disable="splitterDisable" class="desktop-only">
-        <template v-slot:before>
-          <div class="row q-col-gutter-lg q-pa-md">
-            <div :class="tickerClass" v-for="(folder,index) in folders">
-              <ticker-card @source-url="(url) => source = url" :name="folder.name" :index="index" :folder="backupPath"/>
-            </div>
-          </div>
-        </template>
-        <template v-slot:after>
-          <div class="q-pa-md">
-            <div class="container">
-              <iframe class="responsive-iframe" :src="source"></iframe>
-              <q-btn class="absolute-top-right" round color="secondary" icon="close" @click="source = ''" size="sm"/>
-            </div>
-          </div>
-        </template>
-      </q-splitter>
 
+        <q-splitter v-model="splitterModel" :limits="[50, 100]" :disable="splitterDisable" class="desktop-only">
+          <template v-slot:before>
+            <div class="row q-col-gutter-lg q-pa-md">
+              <div v-for="(folder, index) in folders">
+                <ticker-card @source-url="(url) => source = url" :name="folder.name" :index="index"
+                  :folder="backupPath" />
+              </div>
+            </div>
+          </template>
+          <template v-slot:after>
+            <div class="q-pa-md">
+              <div class="container">
+                <iframe class="responsive-iframe" :src="source"></iframe>
+                <q-btn class="absolute-top-right" round color="secondary" icon="close" @click="source = ''" size="sm" />
+              </div>
+            </div>
+          </template>
+        </q-splitter>
+        <div class="mobile-only">
           <div class="row q-col-gutter-lg q-pa-md mobile-only">
-            <div :class="tickerClass" v-for="(folder,index) in folders">
-              <ticker-card @source-url="(url) => source = url" :name="folder.name" :index="index" :folder="backupPath"/>
+            <div v-for="(folder, index) in folders">
+              <ticker-card @source-url="(url) => source = url" :name="folder.name" :index="index"
+                :folder="backupPath" />
             </div>
           </div>
 
-          <q-dialog v-model="statsDialogEnable" persistent maximized transition-show="scale" transition-hide="scale" class="mobile-only" @hide="resetSource()">
+          <q-dialog v-model="statsDialogEnable" persistent maximized transition-show="scale" transition-hide="scale"
+            class="mobile-only" @hide="resetSource()">
             <q-card flat>
 
               <q-card-actions align="right" class="bg-white text-teal">
@@ -81,15 +82,15 @@
             </q-card>
 
           </q-dialog>
+        </div>
 
-    </q-card>
-
+      </q-card>
     </div>
 
     <q-dialog v-model="errorDialog" persistent transition-show="scale" transition-hide="scale"> <!-- @hide="" -->
       <q-card class="bg-red text-white" style="width: 300px">
         <q-card-section>
-          <div class="text-h6">{{$t('error')}}</div>
+          <div class="text-h6">{{ $t('error') }}</div>
         </q-card-section>
 
         <q-card-section class="q-pt-none">
@@ -101,7 +102,7 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-
+s
   </q-page>
 </template>
 
@@ -124,28 +125,28 @@ export default defineComponent({
 
   setup() {
     const tickerClass = computed(() => {
-      if(Platform.is.desktop) {
-        if(splitterModel.value >= 80) {
+      if (Platform.is.desktop) {
+        if (splitterModel.value >= 80) {
           return 'col-lg-2 col-md-3 col-sm-4 col-xs-6'
-        } else if(splitterModel.value < 80 && splitterModel.value > 65) {
+        } else if (splitterModel.value < 80 && splitterModel.value > 65) {
           return 'col-lg-3 col-md-5 col-sm-9 col-xs-12'
         } else {
           return 'col-lg-4 col-md-6 col-sm-12 col-xs-12'
         }
-      } else if(Platform.is.mobile) {
+      } else if (Platform.is.mobile) {
         return 'col-lg-4 col-md-4 col-sm-6 col-xs-12'
       }
 
     })
     const splitterDisable = computed(() => {
-      if(!source.value || source.value == '' || source == '#')
+      if (!source.value || source.value == '' || source == '#')
         return true
       else
         return true //false
     })
     const statsDialogEnable = ref(false)
     const splitterModel = computed(() => {
-      if(!source.value || source.value == '' || source == '#')
+      if (!source.value || source.value == '' || source == '#')
         return 100
       else
         return 50
@@ -162,7 +163,7 @@ export default defineComponent({
     const errorText = ref('')
 
     watch(source, async (newSource, oldSource) => {
-      if(newSource.length > 1 && Platform.is.mobile) {
+      if (newSource.length > 1 && Platform.is.mobile) {
         statsDialogEnable.value = true
       }
     })
@@ -175,19 +176,19 @@ export default defineComponent({
       dateValue.value = setDateNowFormatted()
     }
 
-    function getLatestData (path = constants.API_BASE_FOLDER) {
+    function getLatestData(path = constants.API_BASE_FOLDER) {
       console.log(path)
       loading.value = true
-      api.get(path+constants.API_INDEX_FILE).then( (response) => {
+      api.get(path + constants.API_INDEX_FILE).then((response) => {
         folders.value = response.data.children
       })
-      .catch( (e) => {
-        console.log('getLatestData', e)
-        handleUnexpectedError(e)
-      })
-      .finally(()=> {
-        loading.value = false
-      })
+        .catch((e) => {
+          console.log('getLatestData', e)
+          handleUnexpectedError(e)
+        })
+        .finally(() => {
+          loading.value = false
+        })
     }
 
     function handleUnexpectedError(e) {
@@ -195,13 +196,13 @@ export default defineComponent({
       errorDialog.value = true
     }
 
-    function dateFilter (dt) {
+    function dateFilter(dt) {
       return dt > '2021/12/31' && (date.getDayOfWeek(dt) != 6 && date.getDayOfWeek(dt) != 7) && dt < date.formatDate(Date.now(), 'YYYY/MM/DD')
     }
 
     function getBackupData() {
       let backupDatePath = date.formatDate(dateValue.value, 'YYYYMMDD')
-      getLatestData(constants.API_BACKUP_FOLDER+'/' + backupDatePath + constants.API_BACKUP_BASE_FOLDER)
+      getLatestData(constants.API_BACKUP_FOLDER + '/' + backupDatePath + constants.API_BACKUP_BASE_FOLDER)
       backupPath.value = backupDatePath
       //this.$forceUpdate()
     }
