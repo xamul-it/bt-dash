@@ -2,14 +2,14 @@
   <q-layout view="lHh Lpr lFf">
     <q-header elevated>
       <q-toolbar>
-        <!--<q-btn
+        <q-btn
           flat
           dense
           round
           @click="toggleLeftDrawer"
           icon="menu"
           aria-label="Menu"
-        />-->
+        />
         <q-toolbar-title>
           BT Dashboard
         </q-toolbar-title>
@@ -38,12 +38,51 @@
     >
     <!-- show-if-above -->
       <q-list>
-        <q-item to="/Dashboard" active-class="q-item-no-link-highlighting">
+        <q-item to="/" active-class="q-item-no-link-highlighting">
           <q-item-section avatar>
             <q-icon name="dashboard"/>
           </q-item-section>
           <q-item-section>
             <q-item-label>Dashboard</q-item-label>
+          </q-item-section>
+        </q-item>
+        
+        <q-item to="/ExecuteStrategy" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar>
+            <q-icon name="add_task"/>
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>Esecuzioni</q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <q-item to="/Configure" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar>
+            <q-icon name="build"/>
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>Elenco Tickers</q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <q-item to="/Benchmark" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar>
+            <q-icon name="gps_fixed"/>
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>Benchmark</q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <!-- Riga di separazione -->
+        <q-separator />
+        
+        <q-item to="/Dashboard" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar>
+            <q-icon name="dashboard"/>
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>Dashboard 21</q-item-label>
           </q-item-section>
         </q-item>
         <q-item to="/Dashboard2" active-class="q-item-no-link-highlighting">

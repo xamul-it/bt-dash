@@ -18,7 +18,7 @@
 import {defineComponent, defineAsyncComponent} from 'vue';
 
 export default defineComponent({
-  name: "Tables",
+  name: "Tablesa",
   components: {
     TableProgress: defineAsyncComponent(() => import('components/tables/TableProgress')),
     TableCustomGrid: defineAsyncComponent(() => import('components/tables/TableCustomGrid')),

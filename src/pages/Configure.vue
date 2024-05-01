@@ -1,0 +1,22 @@
+<template>
+  <q-page class="q-pa-sm">
+
+    <table-tickers class="q-mt-lg"></table-tickers>
+
+  </q-page>
+</template>
+
+<script>
+import {defineComponent, defineAsyncComponent} from 'vue';
+
+export default defineComponent({
+  name: "Tables",
+  components: {
+    TableTickers: defineAsyncComponent(() => import('components/tables/TableTickerList')),
+  },
+})
+</script>
+
+<style>
+
+</style>
