@@ -118,7 +118,7 @@ export default defineComponent({
     async function fetchData() {
       loading.value = true;
       try {
-        const response = await axios.get(`${constants.API_BASE_URL}/strategies/index.json`);
+        const response = await axios.get(`${constants.API_BASE_URL}/dyn/st/list`);
         strategie.value = response.data;
         form.value.strategia = strategie.value[0]; 
 
