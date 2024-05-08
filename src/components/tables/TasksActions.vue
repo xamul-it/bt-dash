@@ -86,6 +86,7 @@ const columns = [
   {name: 'Strategia', label: 'Strategia', field: row => row.args.strategia.label, sortable: true, align: 'left'},
   {name: 'Args.Da', label: 'Da', field: row => row.args.da, sortable: true, align: 'left'},
   {name: 'A', label: 'A', field: row => row.args.da, sortable: true, align: 'left'},
+  {name: 'Args', label: 'args', field: row => row.args.parametriStrategia, sortable: true, align: 'left'},
   {name: 'Cash', label: 'Cash', field: row => formatEuro(row.args.cash), sortable: true, align: 'left'},
   {name: 'Importo Op', label: 'Importo Operazioni', field: row => formatEuro(row.args.importoOperazioni), sortable: true, align: 'left'},
   {name: 'Starta', label: 'Start Date', field: row => row.start ? formatTS(row.start) : null, sortable: true, align: 'left'},
@@ -99,11 +100,7 @@ const columns = [
 const fetchData = async () => {
   try {
     const response = await axios.get(constants.API_BASE_URL + '/dyn/mn/stato_chiamate');
-    response.data.forEach(item => {
-        console.log(item);
-      });
     rawData.value = response.data; // Assegna i dati ricevuti alla variabile data
-    console.info(rawData.value)
   } catch (error) {
     console.error('Errore durante il caricamento dei dati:', error);
   }
@@ -117,7 +114,6 @@ const clear = async () => {
         console.log(item);
       });
     rawData.value = response.data; // Assegna i dati ricevuti alla variabile data
-    console.info(rawData.value)
   } catch (error) {
     console.error('Errore durante il caricamento dei dati:', error);
   }
