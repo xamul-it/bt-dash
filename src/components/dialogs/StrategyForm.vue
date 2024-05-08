@@ -2,8 +2,11 @@
   <div class="col-lg-6 col-md-6 col-sm-12 col-xs-12">
     <q-card>
       <q-form class="q-pa-md">
+        <!-- Select per i prefissi -->
+        <q-select label="Seleziona Gruppo" :options="prefissiOptions" v-model="form.selectedPrefisso"
+        @update:model-value="filterStrategies" />
         <!-- Strategia -->
-        <q-select label="Strategia" :options="strategie" v-model="form.strategia" />
+        <q-select label="Strategia" :options="filteredStrategie" v-model="form.strategia" />
 
         <!-- Parametri Strategia -->
         <q-input label="Parametri Strategia" type="text" v-model="form.parametriStrategia" />
@@ -62,17 +65,18 @@
         <q-input v-if="form.tipoTickers === 'ticker'" label="Ticker" v-model="form.ticker" />
 
         <!-- tickers (testo, attivato se si sceglie 'free') -->
-        <q-input v-if="form.tipoTickers === 'free'" label="Tickers" type="text" v-model="form.tickers" class="q-mb-md"/>
-        <div style="height: 20px;"></div>  <!-- Aggiungi uno spaziatore qui -->
+        <q-input v-if="form.tipoTickers === 'free'" label="Tickers" type="text" v-model="form.tickers"
+          class="q-mb-md" />
+        <div style="height: 20px;"></div> <!-- Aggiungi uno spaziatore qui -->
 
         <q-btn label="Invia" @click="inviaDati" color="primary" class="q-mb-lg" />
-        <q-toggle label="Debug Mode" v-model="form.debug" class="q-mb-lg"/>
-        
+        <q-toggle label="Debug Mode" v-model="form.debug" class="q-mb-lg" />
+
       </q-form>
     </q-card>
   </div>
 </template>
-  
+
 <script>
 import { defineComponent, ref, computed } from 'vue';
 import axios from 'axios'
@@ -85,6 +89,9 @@ export default defineComponent({
     const today = new Date();
     const threeYearsAgo = new Date(new Date().setFullYear(today.getFullYear() - 3));
     const strategie = ref([]);
+    const prefissiOptions = ref([]);
+    const filteredStrategie = ref([]);
+    const selectedPrefisso = 'Tutto';
     const tickerList = ref([]);
     const loading = ref(false);
     const error = ref(null);
@@ -120,11 +127,16 @@ export default defineComponent({
       try {
         const response = await axios.get(`${constants.API_BASE_URL}/dyn/st/list`);
         strategie.value = response.data;
-        form.value.strategia = strategie.value[0]; 
+        form.value.strategia = strategie.value[0];
 
         const tl = await axios.get(`${constants.API_BASE_URL}/dyn/tk/options`);
         tickerList.value = tl.data;
-        form.value.tickerList = tickerList.value[0]; 
+        form.value.tickerList = tickerList.value[0];
+        //Inizializzo i prefissi
+        let prefissiSet = new Set(strategie.value.map(item => item.value.split('.')[0]));
+        prefissiOptions.value = ['Tutto', ...prefissiSet];
+
+        filteredStrategie.value = strategie.value
 
       } catch (e) {
         error.value = e;
@@ -134,10 +146,12 @@ export default defineComponent({
       }
     }
 
+
     fetchData();
 
     const form = ref({
       strategia: '',
+      selectedPrefisso: prefissiOptions.value[0],
       parametriStrategia: '',
       da: threeYearsAgo.toISOString().split('T')[0], // Formatta la data in formato YYYY-MM-DD
       a: today.toISOString().split('T')[0], // Formatta la data in formato YYYY-MM-DD
@@ -151,6 +165,16 @@ export default defineComponent({
       debug: false,
     });
 
+    function filterStrategies() {
+      if (form.value.selectedPrefisso === 'Tutto') {
+        filteredStrategie.value = strategie.value;
+      } else {
+        filteredStrategie.value = strategie.value.filter(s =>
+          s.value.startsWith(form.value.selectedPrefisso + '.')
+        );
+        form.value.strategia= ''
+      }
+    }
 
     function formatCurrency(value) {
       const formatter = new Intl.NumberFormat('it-IT', { // 'it-IT' usa il punto per migliaia e virgola per decimali
@@ -181,16 +205,17 @@ export default defineComponent({
     return {
       form,
       inviaDati,
-      strategie,
+      filteredStrategie,
       tipoCommissioni,
       tipiTickers,
       tickerList,
       formatCurrency,
       parseCurrency,
       formattedImportoOperazioni,
-      formattedCash
+      formattedCash,
+      prefissiOptions,
+      filterStrategies
     };
   }
 });
 </script>
-  
