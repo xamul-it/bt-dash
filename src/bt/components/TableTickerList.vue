@@ -19,12 +19,12 @@
     <q-card-section>
       <div class="text-h6 text-grey-8">
         Elenco Liste Tickers
-        <q-btn label="Benchmark" class="float-right text-capitalize text-indigo-8 shadow-3" icon="monitor_heart"
+        <q-btn label="Benchmark" class="float-right text-capitalize text-indigo-8 shadow-3 q-mr-md" icon="monitor_heart" dense
           @click="triggerFileInput" >
           <q-tooltip>Genera il benchmark per tutte le liste</q-tooltip>
         </q-btn>
 
-        <q-btn label="Import" class="float-right text-capitalize text-indigo-8 shadow-3" icon="cloud_upload"
+        <q-btn label="Import" class="float-right text-capitalize text-green-8 shadow-3 q-mr-md" icon="cloud_upload" dense
         @click="triggerFileInput" >
         <q-tooltip>Importa una lista</q-tooltip>
         </q-btn>
@@ -109,6 +109,8 @@ import { defineComponent, ref, toRefs  } from 'vue'
 import axios from 'axios'
 import { constants } from 'boot/constants'
 import TableTicker from './TableTicker.vue';
+import { Notify } from 'quasar'; // Importa Notify da Quasar
+
 
 const columns = [
   { name: 'Name', label: 'Name', field: 'name', sortable: true, align: 'left' },
@@ -184,7 +186,7 @@ export default defineComponent({
         showAlert.value.visible = true
         console.log(response.data);
       } catch (error) {
-        console.error('Errore durante l\'invio dei dati:', error);
+        console.error('Errore durante l\'invio dei dati: '+error);
       }
     };
 
@@ -240,8 +242,14 @@ export default defineComponent({
     //Importazione
     const fileInput = ref(null);
 
-    const triggerFileInput = () => {
-      fileInput.value.click();
+    const triggerFileInput = async () => {
+      try {
+        const response = await axios.get(constants.API_BASE_URL+'/dyn/tk/symbols');
+        Notify.create({ type: 'positive', message: 'Dati inviati con successo!' });
+      } catch (error) {
+        Notify.create({ type: 'negative', message: 'Errore durante il caricamento dei dati:', error });
+        // Gestisci l'errore come preferisci
+      }
     };
 
     const handleFileImport = async (event) => {

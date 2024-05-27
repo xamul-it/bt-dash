@@ -117,6 +117,8 @@ import useFormatTS from '../../composables/useFormatTS';
 import StrategyForm from 'src/bt/components/StrategyForm';
 import axios from 'axios'
 import { constants } from 'boot/constants'
+import { Notify } from 'quasar'; // Importa Notify da Quasar
+
 
 //Finestra non visibile
 const dialogVisible = ref(false);
