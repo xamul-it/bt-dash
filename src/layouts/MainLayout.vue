@@ -52,7 +52,7 @@
             <q-icon name="add_task"/>
           </q-item-section>
           <q-item-section>
-            <q-item-label>Esecuzioni</q-item-label>
+            <q-item-label>Backtesting</q-item-label>
           </q-item-section>
         </q-item>
 

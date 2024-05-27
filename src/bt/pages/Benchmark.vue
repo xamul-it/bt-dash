@@ -17,8 +17,8 @@ import {defineComponent, defineAsyncComponent} from 'vue'
 export default defineComponent({
   name: "Charts",
   components: {
-    AreaChart: defineAsyncComponent(() => import('components/charts/BenchmarkChart')),
-    TableBenchmark: defineAsyncComponent(() => import('components/tables/BenchmarkList')),
+    AreaChart: defineAsyncComponent(() => import('src/bt/components/BenchmarkChart')),
+    TableBenchmark: defineAsyncComponent(() => import('src/bt/components/BenchmarkList')),
   },
   methods: {
     handleRowSelected(nome) {

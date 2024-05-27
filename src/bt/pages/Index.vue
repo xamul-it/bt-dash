@@ -120,7 +120,7 @@ function setDateNowFormatted() {
 export default defineComponent({
   name: "Index",
   components: {
-    TickerCard: defineAsyncComponent(() => import('components/cards/TickerCard'))
+    TickerCard: defineAsyncComponent(() => import('src/bt/components/TickerCard'))
   },
 
   setup() {

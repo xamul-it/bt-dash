@@ -1,7 +1,7 @@
 <template>
   <div class="col-lg-6 col-md-6 col-sm-12 col-xs-12">
     <q-card>
-      <q-form class="q-pa-md">
+      <q-form @submit.prevent="submitForm" class="q-pa-md">
         <!-- Select per i prefissi -->
         <q-select label="Seleziona Gruppo" :options="prefissiOptions" v-model="form.selectedPrefisso"
         @update:model-value="filterStrategies" />
@@ -78,14 +78,31 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed } from 'vue';
+import { defineComponent, ref, computed, reactive, watch } from 'vue';
 import axios from 'axios'
 import { constants } from 'boot/constants'
-
+import { Notify } from 'quasar'; // Importa Notify da Quasar
 
 
 export default defineComponent({
-  setup() {
+  name: 'StrategyForm',
+  props: {
+    initialValues: {
+      type: Object,
+      default: () => ({})
+    }
+  },
+
+
+  setup(props, { emit }) {
+
+    const forms = reactive({ ...props.initialValues });
+
+    watch(() => props.initialValues, (newValues) => {
+      Object.assign(forms, newValues);
+    }, { immediate: true });
+
+
     const today = new Date();
     const threeYearsAgo = new Date(new Date().setFullYear(today.getFullYear() - 3));
     const strategie = ref([]);
@@ -112,26 +129,26 @@ export default defineComponent({
 
     async function inviaDati() {
       try {
-        // sostituisci `axios` con il tuo metodo di chiamata API preferito
-        // per questo esempio, assumeremo che tu abbia configurato Axios globalmente
         const response = await axios.post(`${constants.API_BASE_URL}/dyn/mn/main`, form.value);
-        $q.notify({ type: 'positive', message: 'Dati inviati con successo!' });
+        Notify.create({ type: 'positive', message: 'Dati inviati con successo!' });
+        emit('form-submitted');
       } catch (error) {
         console.error('Errore nell\'invio dei dati:', error);
-        $q.notify({ type: 'negative', message: 'Errore nell\'invio dei dati.' });
+        Notify.create({ type: 'negative', message: 'Errore nell\'invio dei dati:'+error });
       }
     }
 
     async function fetchData() {
+      
       loading.value = true;
       try {
         const response = await axios.get(`${constants.API_BASE_URL}/dyn/st/list`);
         strategie.value = response.data;
-        form.value.strategia = strategie.value[0];
+        //form.value.strategia = strategie.value[0];
 
         const tl = await axios.get(`${constants.API_BASE_URL}/dyn/tk/options`);
         tickerList.value = tl.data;
-        form.value.tickerList = tickerList.value[0];
+        //form.value.tickerList = tickerList.value[0];
         //Inizializzo i prefissi
         let prefissiSet = new Set(strategie.value.map(item => item.value.split('.')[0]));
         prefissiOptions.value = ['Tutto', ...prefissiSet];
@@ -148,8 +165,10 @@ export default defineComponent({
 
 
     fetchData();
+    const form = ref({});
 
-    const form = ref({
+
+    const formold = ref({
       strategia: '',
       selectedPrefisso: prefissiOptions.value[0],
       parametriStrategia: '',
@@ -202,6 +221,7 @@ export default defineComponent({
       set: val => form.value.cash = parseCurrency(val)
     });
 
+
     return {
       form,
       inviaDati,
@@ -214,7 +234,8 @@ export default defineComponent({
       formattedImportoOperazioni,
       formattedCash,
       prefissiOptions,
-      filterStrategies
+      filterStrategies,
+      forms
     };
   }
 });

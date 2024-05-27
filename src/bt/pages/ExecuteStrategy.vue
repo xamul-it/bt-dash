@@ -1,8 +1,8 @@
 <template>
     <q-page class="q-pa-sm">
-        <div class="row q-col-gutter-sm q-py-sm items-start">
+        <!--<div class="row q-col-gutter-sm q-py-sm items-start">
             <strategy-form> </strategy-form>
-        </div>
+        </div>-->
         <div class="items-start">
         <tasks-actions class="q-mt-lg"></tasks-actions>
     </div>
@@ -14,8 +14,8 @@ import { defineComponent, defineAsyncComponent } from 'vue'
 
 export default defineComponent({
     components: {
-        StrategyForm: defineAsyncComponent(() => import('components/dialogs/StrategyForm')),
-        TasksActions: defineAsyncComponent(() => import('components/tables/TasksActions')),
+        //StrategyForm: defineAsyncComponent(() => import('src/bt/components/StrategyForm')),
+        TasksActions: defineAsyncComponent(() => import('src/bt/components/TasksActions')),
 
     }
 });

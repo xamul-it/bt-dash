@@ -1,10 +1,33 @@
 <template>
+
+  <q-dialog v-model="showAlert.visible" persistent>
+      <q-card>
+        <q-card-section class="q-pt-none">
+          <q-card-title class="text-negative">{{ showAlert.title }}</q-card-title>
+          <q-card-main>
+            {{ showAlert.message }}
+          </q-card-main>
+          <q-card-actions align="right">
+            <q-btn color="negative" label="OK" @click="showAlert.visible = false" />
+          </q-card-actions>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
+
   <q-card>
     <q-card-section>
       <div class="text-h6 text-grey-8">
         Elenco Liste Tickers
+        <q-btn label="Benchmark" class="float-right text-capitalize text-indigo-8 shadow-3" icon="monitor_heart"
+          @click="triggerFileInput" >
+          <q-tooltip>Genera il benchmark per tutte le liste</q-tooltip>
+        </q-btn>
+
         <q-btn label="Import" class="float-right text-capitalize text-indigo-8 shadow-3" icon="cloud_upload"
-          @click="triggerFileInput" />
+        @click="triggerFileInput" >
+        <q-tooltip>Importa una lista</q-tooltip>
+        </q-btn>
       </div>
       <input type="file" ref="fileInput" style="display: none" @change="handleFileImport" />
     </q-card-section>
@@ -41,14 +64,23 @@
             <div v-else @click="startEditing(props.row)">
               {{ props.row.des }}
             </div>
+            
           </q-td>
         </template>
 
 
         <template v-slot:body-cell-Action="props">
           <q-td :props="props">
-            <q-btn icon="edit" size="sm" flat dense @click="openDialog(props.row)" />
+            <q-btn icon="edit" size="sm" flat dense @click="openDialog(props.row)" >
+              <q-tooltip>Modifica la lista</q-tooltip>
+            </q-btn>
             <!--q-btn icon="delete" size="sm" class="q-ml-sm" flat dense/-->
+            <q-btn icon="sync_alt" size="sm" flat dense @click="init(props.row)" >
+              <q-tooltip>Scarica i dati dei ticker localmente, per ora solo Yahoo</q-tooltip>
+            </q-btn>
+            <q-btn icon="monitor_heart" tooltip="Create Benchmark" size="sm" flat dense @click="benchmark(props.row)" >
+              <q-tooltip>Genera il benchmark</q-tooltip>
+            </q-btn>
           </q-td>
         </template>
       </q-table>
@@ -56,25 +88,14 @@
   </q-card>
 
 
-  <q-dialog v-model="isDialogOpen" style="width: 40vw; height: 80vh;" @hide="updateBlacklist">
+  <q-dialog v-model="isDialogOpen"  @hide="updateBlacklist">
     <q-card style="width: 100%; height: 100%;">
       <q-card-section>
         <div class="text-h6">Dettagli della lista {{ selectedName }}</div>
       </q-card-section>
 
-      <q-card-section>
-        <q-list>
-          <q-item v-for="(item, index) in selectedRecord" :key="index" class="q-py-xs"
-            :class="{ 'item-blacklisted': isBlacklisted(item), 'item-not-blacklisted': !isBlacklisted(item) }">
-            <q-item-section>
-              {{ item }}
-            </q-item-section>
-            <q-item-section side>
-              <q-btn flat :icon="isBlacklisted(item) ? 'done' : 'clear'" @click="switchItem(item)" />
-            </q-item-section>
-          </q-item>
-        </q-list>
-      </q-card-section>
+      <!-- Integrazione di TableTicker -->
+      <TableTicker :dataUrl="'/dyn/tk/ticker-list/'+selectedName" />
 
       <q-card-actions align="right">
         <q-btn flat label="Chiudi" color="primary" v-close-popup />
@@ -84,9 +105,10 @@
 </template>
 
 <script>
-import { defineComponent, ref } from 'vue'
+import { defineComponent, ref, toRefs  } from 'vue'
 import axios from 'axios'
 import { constants } from 'boot/constants'
+import TableTicker from './TableTicker.vue';
 
 const columns = [
   { name: 'Name', label: 'Name', field: 'name', sortable: true, align: 'left' },
@@ -94,12 +116,16 @@ const columns = [
   { name: 'Created Date', label: 'Created Date', field: 'created', sortable: true, align: 'left' },
   { name: 'Updated Date', label: 'Updated Date', field: 'updated', sortable: true, align: 'left' },
   { name: 'Num tickers', label: 'Num', field: 'num', sortable: true, align: 'left' },
+  { name: 'Valid tickers', label: 'Valid', field: 'valid', sortable: true, align: 'left' },
   { name: 'Action', label: '', field: 'Action', sortable: false, align: 'center' }
 ];
 
 
 export default defineComponent({
   name: "TableActions",
+  components: {
+    TableTicker
+  },
   setup() {
     const data = ref([]); // Inizializza data come un array reattivo vuoto
     const editingRow = ref(null); // Nuova ref per tenere traccia dell'elemento in modifica
@@ -107,7 +133,7 @@ export default defineComponent({
     // Funzione per aggiornare la descrizione
     const updateDescription = async (row) => {
       try {
-        const response = await axios.post(`${constants.API_BASE_URL}/dyn/tk/update-tickerls/` + row.name, row);
+        const response = await axios.post(`${constants.API_BASE_URL}/dyn/tk/update-list/` + row.name, row);
         if (response.status === 200) {
           // Aggiorna i dati solo se il codice di stato è 200
           const index = data.value.findIndex(item => item.name === row.name);
@@ -136,6 +162,33 @@ export default defineComponent({
       return blacklist.value.includes(item);
     };
 
+    const init = async (row) => {
+      try {
+        const response = await axios.get(`${constants.API_BASE_URL}/dyn/tk/init/`+ row.name);
+        // Gestisci la risposta, se necessario
+        showAlert.value.title = "Esito chiamata init su " + row.name
+        showAlert.value.message = response.data
+        showAlert.value.visible = true
+        console.log(response.data);
+      } catch (error) {
+        console.error('Errore durante l\'invio dei dati:', error);
+      }
+    };
+
+    const benchmark = async (row) => {
+      try {
+        const response = await axios.get(`${constants.API_BASE_URL}/dyn/tk/benchmark/`+ row.name);
+        // Gestisci la risposta, se necessario
+        showAlert.value.title = "Esito chiamata benchmark su " + row.name
+        showAlert.value.message = response.data
+        showAlert.value.visible = true
+        console.log(response.data);
+      } catch (error) {
+        console.error('Errore durante l\'invio dei dati:', error);
+      }
+    };
+
+
     const updateBlacklist = async (listName) => {
       try {
         const response = await axios.post(`${constants.API_BASE_URL}/dyn/tk/update-tickers/bl`, blacklist.value);
@@ -159,7 +212,7 @@ export default defineComponent({
     // Funzione per recuperare i dati
     const fetchData = async () => {
       try {
-        const response = await axios.get(constants.API_BASE_URL+'/dyn/tk/get-tickerls');
+        const response = await axios.get(constants.API_BASE_URL+'/dyn/tk/get-lists');
         data.value = response.data; // Assegna i dati ricevuti alla variabile data
       } catch (error) {
         console.error('Errore durante il caricamento dei dati:', error);
@@ -167,19 +220,19 @@ export default defineComponent({
       }
     }
 
+    //alert
+    const showAlert = ref({
+      visible: false,
+      title: '',
+      message: ''
+    });
+
     //dialog
     const isDialogOpen = ref(false);
-    const selectedRecord = ref({}); // Qui memorizzerai i dettagli del record selezionato
+  
     const blacklist = ref({});
     const selectedName = ref('');
     const openDialog = async (record) => {
-      // Carica i dettagli del record qui (ad esempio, usando axios)
-
-      const bl = await axios.get(`${constants.API_BASE_URL}/dyn/tk/tickerls/bl`);
-      blacklist.value = bl.data;
-
-      const response = await axios.get(`${constants.API_BASE_URL}/dyn/tk/tickerls/${record.name}`);
-      selectedRecord.value = response.data;
       selectedName.value = record.name;
       isDialogOpen.value = true;
     };
@@ -199,8 +252,6 @@ export default defineComponent({
         try {
           const reader = new FileReader();
           reader.onload = async (e) => {
-            //const formData = new FormData();
-            //formData.append('file', file);
             const content = JSON.parse(e.target.result);
             const response = await axios.post(`${constants.API_BASE_URL}/dyn/tk/update-tickers/${listName}`, content, {
               headers: {
@@ -228,7 +279,6 @@ export default defineComponent({
       updateDescription,
       openDialog,
       isDialogOpen,
-      selectedRecord,
       selectedName,
       blacklist,
       isBlacklisted,
@@ -237,6 +287,10 @@ export default defineComponent({
       fileInput,
       triggerFileInput,
       handleFileImport,
+      init,
+      showAlert,
+      benchmark
+
     }
   }
 })
