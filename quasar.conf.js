@@ -47,6 +47,13 @@ module.exports = configure(function (ctx) {
 
     // Full list of options: https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-build
     build: {
+      extendWebpack(cfg) {
+        cfg.watchOptions = {
+          aggregateTimeout: 200,
+          poll: 1000,
+        };
+      },
+  
       vueRouterMode: 'hash', // available values: 'hash', 'history'
       env: {
         VUE_APP_API_URL: process.env.VUE_APP_API_URL || 'http://localhost:9090'
@@ -75,10 +82,11 @@ module.exports = configure(function (ctx) {
       },
     },
 
+
     // Full list of options: https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-devServer
     devServer: {
       server: {
-        type: 'http'
+        type: 'http',
       },
       port: process.env.PORT || 8080,
       open: true // opens browser window automatically

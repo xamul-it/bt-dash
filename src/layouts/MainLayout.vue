@@ -74,6 +74,15 @@
           </q-item-section>
         </q-item>
 
+        <q-item to="/Scheduler" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar>
+            <q-icon name="timer"/>
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>Scheduler</q-item-label>
+          </q-item-section>
+        </q-item>
+
         <!-- Riga di separazione -->
         <q-separator />
         

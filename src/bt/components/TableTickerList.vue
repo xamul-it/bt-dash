@@ -14,19 +14,13 @@
       </q-card>
     </q-dialog>
 
-
   <q-card>
     <q-card-section>
       <div class="text-h6 text-grey-8">
         Elenco Liste Tickers
-        <q-btn label="Benchmark" class="float-right text-capitalize text-indigo-8 shadow-3 q-mr-md" icon="monitor_heart" dense
-          @click="triggerFileInput" >
-          <q-tooltip>Genera il benchmark per tutte le liste</q-tooltip>
-        </q-btn>
-
         <q-btn label="Import" class="float-right text-capitalize text-green-8 shadow-3 q-mr-md" icon="cloud_upload" dense
         @click="triggerFileInput" >
-        <q-tooltip>Importa una lista</q-tooltip>
+        <q-tooltip>Importa una lista da pysymbols</q-tooltip>
         </q-btn>
       </div>
       <input type="file" ref="fileInput" style="display: none" @change="handleFileImport" />
@@ -179,7 +173,7 @@ export default defineComponent({
 
     const benchmark = async (row) => {
       try {
-        const response = await axios.get(`${constants.API_BASE_URL}/dyn/tk/benchmark/`+ row.name);
+        const response = await axios.get(`${constants.API_BASE_URL}/dyn/bm/update/`+ row.name);
         // Gestisci la risposta, se necessario
         showAlert.value.title = "Esito chiamata benchmark su " + row.name
         showAlert.value.message = response.data
@@ -261,7 +255,7 @@ export default defineComponent({
           const reader = new FileReader();
           reader.onload = async (e) => {
             const content = JSON.parse(e.target.result);
-            const response = await axios.post(`${constants.API_BASE_URL}/dyn/tk/update-tickers/${listName}`, content, {
+            const response = await axios.post(`${constants.API_BASE_URL}/dyn/bm/update-tickers/${listName}`, content, {
               headers: {
                 'Content-Type': 'application/json'
               }

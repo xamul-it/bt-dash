@@ -8,6 +8,7 @@ const routes = [
       { path: '/Configure', component: () => import('src/bt/pages/Configure.vue')},
       { path: '/Benchmark', component: () => import('src/bt/pages/Benchmark.vue')},
       { path: '/ExecuteStrategy', component: () => import('src/bt/pages/ExecuteStrategy.vue')},
+      { path: '/Scheduler', component: () => import('src/bt/pages/Scheduler.vue')},
 
       { path: '/Dashboard', component: () => import('src/bt/pages/Index.vue')},
       { path: '/Dashboard3', component: () => import('pages/Dashboard.vue')},

@@ -1,5 +1,17 @@
 <template>
   <q-card>
+    <q-card-section>
+      <div class="text-h6 text-grey-8">
+        Elenco benchmark disponibili
+        <q-btn label="Rigenera" class="float-right text-capitalize text-indigo-8 shadow-3 q-mr-md" icon="monitor_heart" dense
+          @click="benchmarks" >
+          <q-tooltip>Genera il benchmark per tutte le liste</q-tooltip>
+        </q-btn>
+
+      </div>
+      <input type="file" ref="fileInput" style="display: none" @change="handleFileImport" />
+    </q-card-section>
+
     <q-card-section class="q-pa-none">
       <q-table :rows="data" :columns="columns">
 
@@ -30,6 +42,7 @@
 import { defineComponent, ref } from 'vue'
 import axios from 'axios'
 import { constants } from 'boot/constants'
+import { Notify } from 'quasar'; // Importa Notify da Quasar
 
 const columns = [
   { name: 'Action', label: '', field: 'Action', sortable: false, align: 'center' },
@@ -55,6 +68,18 @@ export default defineComponent({
         console.error('Errore durante il caricamento dei dati:', error);
       }
     }
+
+    const benchmarks = async () => {
+      try {
+        const response = await axios.get(constants.API_BASE_URL+'/dyn/bm/update');
+        Notify.create({ type: 'positive', message: 'Dati inviati con successo!' });
+      } catch (error) {
+        Notify.create({ type: 'negative', message: 'Errore durante il caricamento dei dati:', error });
+        // Gestisci l'errore come preferisci
+      }
+    };
+
+
 
     // Funzione per aggiornare la descrizione
     const updateDescription = async (row) => {
@@ -96,7 +121,8 @@ export default defineComponent({
       startEditing,
       stopEditing,
       editingRow,
-      onRowSelect
+      onRowSelect,
+      benchmarks
     }
   }
 })

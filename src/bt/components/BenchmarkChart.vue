@@ -102,7 +102,7 @@ export default {
       this.load("buyandhold")
     },
     async load(benchmark){
-      const response = await axios.get(`${constants.API_BASE_URL}/dyn/bm/benchmark/`+benchmark);
+      const response = await axios.get(`${constants.API_BASE_URL}/dyn/bm/get/`+benchmark);
       const data = response.data;
       
       this.title = benchmark
