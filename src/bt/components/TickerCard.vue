@@ -167,7 +167,7 @@ export default defineComponent({
   },
   setup(props) {
     const data = ref([])
-    const baseURL = ref(constants.API_BASE_FOLDER)
+    const baseURL = ref(constants.API_BASE_URL)
     const statsURL = ref('')
     const detailsURL = ref('')
 
@@ -179,8 +179,7 @@ export default defineComponent({
           detailsURL.value = '#'+constants.PAGE_DETAILS+'/'+props.name + '/' + props.folder
           loadData()
         } else {
-          baseURL.value = constants.API_BASE_FOLDER
-          statsURL.value = baseURL.value +'/'+ props.name + constants.STATS_FILE
+          statsURL.value = baseURL.value +'/config/schedule/'+ props.name + constants.STATS_FILE
           detailsURL.value = '#'+constants.PAGE_DETAILS+'/'+props.name
           loadData()
         }
@@ -196,7 +195,7 @@ export default defineComponent({
     }
 
     function loadData() {
-      api.get(baseURL.value+'/'+props.name+constants.API_TICKER_DATA_FILE).then( (response) => {
+      api.get(baseURL.value+'/config/schedule/'+props.name+constants.API_TICKER_DATA_FILE).then( (response) => {
         //https://stackoverflow.com/questions/63559228/how-to-access-an-object-without-knowing-its-name
         let res = response.data[Object.keys(response.data)[0]]
         data.value = res

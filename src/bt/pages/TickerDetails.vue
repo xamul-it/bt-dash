@@ -37,12 +37,12 @@ export default defineComponent({
             return constants.API_BACKUP_FOLDER+'/'+routeParamsRef.value.param+constants.API_BACKUP_BASE_FOLDER+'/'+routeParamsRef.value.ticker
           }else {
             if (routeParamsRef.value.status=='pin')
-              return constants.API_BASE_URL + "/stored/"+routeParamsRef.value.ticker+'/'+routeParamsRef.value.param
+              return constants.API_BASE_URL + "/config/stored/"+routeParamsRef.value.ticker+'/'+routeParamsRef.value.param
             else
-              return constants.API_BASE_FOLDER+'/'+routeParamsRef.value.ticker+'/'+routeParamsRef.value.param
+              return constants.API_BASE_FOLDER+routeParamsRef.value.ticker+'/'+routeParamsRef.value.param
           }
         } else {
-          return constants.API_BASE_FOLDER+'/'+routeParamsRef.value.ticker
+          return constants.API_BASE_URL+'/config/schedule/'+routeParamsRef.value.ticker
         }
       }
     )

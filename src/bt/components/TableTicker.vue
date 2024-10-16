@@ -154,7 +154,7 @@ export default defineComponent({
 
     const update = async () => {
       try {
-        await axios.get(constants.API_BASE_URL + '/dyn/tk/update');
+        await axios.get(constants.API_BASE_URL + '/dyn/tk/init');
       } catch (error) {
         console.error('Errore durante il caricamento dei dati:', error);
       }

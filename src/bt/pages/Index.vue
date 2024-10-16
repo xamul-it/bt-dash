@@ -176,7 +176,7 @@ export default defineComponent({
       dateValue.value = setDateNowFormatted()
     }
 
-    function getLatestData(path = constants.API_BASE_FOLDER) {
+    function getLatestData(path = "") {
       console.log(path)
       loading.value = true
       api.get(path + constants.API_INDEX_FILE).then((response) => {

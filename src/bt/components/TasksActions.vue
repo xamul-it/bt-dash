@@ -59,6 +59,7 @@
 
         <template v-slot:body-cell-Action="props">
           <q-td :props="props">
+            <q-btn icon="timer" size="sm" class="q-ml-sm" flat dense @click="schedule(props.row)" v-if="props.row.end"/>
             <q-btn :icon="props.row.pinned ? 'bookmark_remove' : 'bookmark_add '" size="sm" class="q-ml-sm" flat dense @click="pin_switch(props.row)" v-if="props.row.end"/>
             <q-btn icon="candlestick_chart" size="sm" class="q-ml-sm" flat dense @click="candle(props.row)" v-if="props.row.end"/>
             <q-btn icon="insights" size="sm" flat dense @click="openDialog(props.row)" v-if="props.row.end"/>
@@ -93,6 +94,9 @@
     </q-card>
 </q-dialog>
 
+<ScheduleDialog ref="scheduleDialog" @confirm-schedule="handleSchedule"/>
+
+
 </template>
 
 <style scoped>
@@ -115,6 +119,8 @@ import { nextTick, defineComponent, ref, onMounted, onBeforeUnmount  } from 'vue
 import useFormatEuro from '../../composables/useFormatEuro';
 import useFormatTS from '../../composables/useFormatTS';
 import StrategyForm from 'src/bt/components/StrategyForm';
+import ScheduleDialog from 'src/bt/components/ScheduleDialog';
+
 import axios from 'axios'
 import { constants } from 'boot/constants'
 import { Notify } from 'quasar'; // Importa Notify da Quasar
@@ -124,6 +130,7 @@ import { Notify } from 'quasar'; // Importa Notify da Quasar
 const dialogVisible = ref(false);
 const title = ref('Titolo Dialog'); // Example title variable
 const src = ref('example-url'); // Example URL variable
+
 
 const { formatEuro } = useFormatEuro();
 const { formatTS } = useFormatTS();
@@ -181,10 +188,11 @@ const openDialog = (row) => {
   const parts = lab.split('.');
   const str = parts.slice(-1)[0];
   title.value = "Factsheet " + str
-  src.value = constants.API_BASE_URL + (row.pinned ? "/stored/" : "/out/") + str + "/" + row.id + "/stats.html"
+  src.value = constants.API_BASE_URL + (row.pinned ? "/config/stored/" : "/out/") + str + "/" + row.id + "/stats.html"
   dialogVisible.value = true;
 
 };
+
 
 const candle = (row) => {
   // Split the string based on the dot (.) character
@@ -274,7 +282,34 @@ const getStatusIcon = (status) => {
   export default defineComponent({
   name: "TableActions",
   components: {
-    StrategyForm
+    StrategyForm,
+    ScheduleDialog
+  },
+  methods: {
+    schedule(row) {
+      // Assicurati che `this` si riferisca all'istanza Vue
+      this.$refs.scheduleDialog.scheduleDialog(row);
+    },
+    // Gestisci i dati emessi dall'evento del componente figlio
+    async handleSchedule(scheduleData) {
+      try {
+        const response = await axios.post(constants.API_BASE_URL + '/dyn/mn/schedule', scheduleData);
+
+        this.$q.notify({
+          color: 'positive',
+          position: 'top',
+          message: 'Schedulazione inviata con successo!',
+          icon: 'cloud_done'
+        });
+      } catch (error) {
+        this.$q.notify({
+          color: 'negative',
+          position: 'top',
+          message: 'Errore durante l\'invio della schedulazione.',
+          icon: 'error'
+        });
+      }
+    }
   },
   setup() {
 

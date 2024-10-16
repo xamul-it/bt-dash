@@ -107,7 +107,7 @@ export default defineComponent({
       getLatestData()
     })
 
-    function getLatestData(path = constants.API_BASE_FOLDER) {
+    function getLatestData(path = "") {
       loading.value = true
       api.get(props.apiURL).then((response) => {
 

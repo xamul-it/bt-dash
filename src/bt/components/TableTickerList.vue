@@ -20,7 +20,7 @@
         Elenco Liste Tickers
         <q-btn label="Import" class="float-right text-capitalize text-green-8 shadow-3 q-mr-md" icon="cloud_upload" dense
         @click="triggerFileInput" >
-        <q-tooltip>Importa una lista da pysymbols</q-tooltip>
+        <q-tooltip>Importa e aggiorna le liste dei mercati europei da pysymbols</q-tooltip>
         </q-btn>
       </div>
       <input type="file" ref="fileInput" style="display: none" @change="handleFileImport" />
