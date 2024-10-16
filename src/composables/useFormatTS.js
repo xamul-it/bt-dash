@@ -12,11 +12,13 @@ export default function useFormatTS() {
       };
   
       const mergedOptions = { ...defaultOptions, ...options };
-  
-      const date = new Date(milliseconds);
-      const formatter = new Intl.DateTimeFormat(locale, mergedOptions);
-  
-      return formatter.format(date);
+      if (milliseconds) {
+        const date = new Date(milliseconds);
+        const formatter = new Intl.DateTimeFormat(locale, mergedOptions);
+        return date ? formatter.format(date) : null;
+      }else {
+        return null
+      }
     };
   
     return { formatTS };

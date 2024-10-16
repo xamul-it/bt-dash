@@ -52,7 +52,7 @@
             <q-icon name="add_task"/>
           </q-item-section>
           <q-item-section>
-            <q-item-label>Esecuzioni</q-item-label>
+            <q-item-label>Backtesting</q-item-label>
           </q-item-section>
         </q-item>
 
@@ -71,6 +71,15 @@
           </q-item-section>
           <q-item-section>
             <q-item-label>Benchmark</q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <q-item to="/Scheduler" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar>
+            <q-icon name="timer"/>
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>Scheduler</q-item-label>
           </q-item-section>
         </q-item>
 

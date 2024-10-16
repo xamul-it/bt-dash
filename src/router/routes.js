@@ -4,12 +4,13 @@ const routes = [
     path: '/',
     component: () => import('layouts/MainLayout.vue'),
     children: [
-      { path: '', component: () => import('pages/Index.vue') },
-      { path: '/Configure', component: () => import('pages/Configure.vue')},
-      { path: '/Benchmark', component: () => import('pages/Benchmark.vue')},
-      { path: '/ExecuteStrategy', component: () => import('pages/ExecuteStrategy.vue')},
+      { path: '', component: () => import('src/bt/pages/Index.vue') },
+      { path: '/Configure', component: () => import('src/bt/pages/Configure.vue')},
+      { path: '/Benchmark', component: () => import('src/bt/pages/Benchmark.vue')},
+      { path: '/ExecuteStrategy', component: () => import('src/bt/pages/ExecuteStrategy.vue')},
+      { path: '/Scheduler', component: () => import('src/bt/pages/Scheduler.vue')},
 
-      { path: '/Dashboard', component: () => import('pages/Index.vue')},
+      { path: '/Dashboard', component: () => import('src/bt/pages/Index.vue')},
       { path: '/Dashboard3', component: () => import('pages/Dashboard.vue')},
       { path: '/Dashboard2', component: () => import('pages/Dashboard2.vue')},
       { path: '/Cards', component: () => import('pages/Cards.vue')},
@@ -22,11 +23,15 @@ const routes = [
   },
   {
     path: '/details/:ticker',
-    component: () => import('pages/TickerDetails.vue')
+    component: () => import('src/bt/pages/TickerDetails.vue')
   },
   {
-    path: '/details/:ticker/:date',
-    component: () => import('pages/TickerDetails.vue')
+    path: '/details/:ticker/:param',
+    component: () => import('src/bt/pages/TickerDetails.vue')
+  },
+  {
+    path: '/details/:ticker/:param/:status',
+    component: () => import('src/bt/pages/TickerDetails.vue')
   },
   // Always leave this as last one,
   // but you can also remove it
