@@ -113,7 +113,7 @@ export default defineComponent({
     },
     // Gestisci i dati emessi dall'evento del componente figlio
     async handleSchedule(scheduleData) {
-      //try {
+      //try { 
         const data = JSON.stringify(scheduleData)
         const response = await axios.post(constants.API_BASE_URL + '/dyn/sc/update_job', data, {
           headers: {
