@@ -60,10 +60,10 @@
         <template v-slot:body-cell-Action="props">
           <q-td :props="props">
             <q-btn icon="timer" size="sm" class="q-ml-sm" flat dense @click="schedule(props.row)" v-if="props.row.end"/>
-            <q-btn :icon="props.row.pinned ? 'bookmark_remove' : 'bookmark_add '" size="sm" class="q-ml-sm" flat dense @click="pin_switch(props.row)" v-if="props.row.end"/>
+            <q-btn :icon="props.row.pinned ? 'remove' : 'add '" size="sm" class="q-ml-sm" flat dense @click="pin_switch(props.row)" v-if="props.row.end"/>
             <q-btn icon="candlestick_chart" size="sm" class="q-ml-sm" flat dense @click="candle(props.row)" v-if="props.row.end"/>
             <q-btn icon="insights" size="sm" flat dense @click="openDialog(props.row)" v-if="props.row.end"/>
-            <q-btn icon="delete" size="sm" class="q-ml-sm" flat dense @click="remove(props.row)" v-if="props.row.end"/>
+            <q-btn icon="delete" size="sm" class="q-ml-sm" flat dense @click="remove(props.row)" v-if="props.row.stato !== 'In esecuzione'"/>
             <q-btn icon="copy_all" size="sm" class="q-ml-sm" flat dense @click="copyform(props.row)"/>
           </q-td>
         </template>
