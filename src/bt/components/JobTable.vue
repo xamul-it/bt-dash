@@ -3,7 +3,7 @@
     <template v-slot:body="props">
       <q-tr :props="props">
         <q-td v-for="col in props.cols" :key="col.name" :props="props">
-          <template v-if="col.name === 'status'">
+          <template v-if="col.name === 'job_status'">
             <q-btn color="blue" @click="editJob(props.row.id)" icon="edit" flat
               dense><q-tooltip>Edit</q-tooltip></q-btn>
             <q-btn color="amber" v-if="props.row.next_run_time != 'None'" @click="pauseJob(props.row.id)"
@@ -56,7 +56,8 @@ export default defineComponent({
         { name: 'function', align: 'left', label: 'Function', field: 'function' },
         { name: 'args', align: 'left', label: 'Arguments', field: 'args' },
         { name: 'trigger', align: 'left', label: 'Trigger', field: 'trigger' },
-        { name: 'status', label: 'Status', field: row => row.next_run_time == 'None' ? 'Paused' : 'Running', sortable: false },
+        { name: 'status', align: 'left', label: 'Trigger', field: 'status' },
+        { name: 'job_status', label: 'Status', field: row => row.next_run_time == 'None' ? 'Paused' : 'Running', sortable: false },
       ]
     };
   },

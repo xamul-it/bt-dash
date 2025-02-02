@@ -52,7 +52,7 @@ export default defineComponent({
 
     fetchJobs() {
       this.$axios.get(`${constants.API_BASE_URL}/dyn/sc/jobs`).then(response => {
-        this.jobs = response.data.map(job => ({ ...job, status: 'running' })); // assuming all jobs are running initially
+        this.jobs = response.data.map(job => ({ ...job })); // assuming all jobs are running initially
       });
     },
     stopScheduler() {
