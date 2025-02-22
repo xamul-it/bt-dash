@@ -69,8 +69,12 @@
           class="q-mb-md" />
         <div style="height: 20px;"></div> <!-- Aggiungi uno spaziatore qui -->
 
+        <!-- Broker -->
+        <q-select label="Broker" :options="broker" v-model="form.broker" />
+
         <q-btn label="Invia" @click="inviaDati" color="primary" class="q-mb-lg" />
         <q-toggle label="Debug Mode" v-model="form.debug" class="q-mb-lg" />
+
 
       </q-form>
     </q-card>
@@ -126,6 +130,10 @@ export default defineComponent({
       { label: 'Free', value: 'free' },
     ]);
 
+    const broker = ref([
+      { label: 'Default Internal', value: 'default' },
+      { label: 'Alpaca', value: 'alpaca' },
+    ]);
 
     async function inviaDati() {
       try {
@@ -235,7 +243,8 @@ export default defineComponent({
       formattedCash,
       prefissiOptions,
       filterStrategies,
-      forms
+      forms,
+      broker
     };
   }
 });

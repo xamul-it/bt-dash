@@ -109,6 +109,7 @@ import { Notify } from 'quasar'; // Importa Notify da Quasar
 const columns = [
   { name: 'Name', label: 'Name', field: 'name', sortable: true, align: 'left' },
   { name: 'Descrizione', label: 'Descrizione', field: 'des', sortable: true, align: 'left' },
+  { name: 'Provider', label: 'Provider', field: 'provider', sortable: true, align: 'left' },
   { name: 'Created Date', label: 'Created Date', field: 'created', sortable: true, align: 'left' },
   { name: 'Updated Date', label: 'Updated Date', field: 'updated', sortable: true, align: 'left' },
   { name: 'Num tickers', label: 'Num', field: 'num', sortable: true, align: 'left' },

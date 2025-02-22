@@ -85,7 +85,16 @@
 
         <!-- Riga di separazione -->
         <q-separator />
-        
+
+        <q-item to="/Alpaca" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar>
+            <q-icon name="account_balance_wallet"/>
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>My Portfolio</q-item-label>
+          </q-item-section>
+        </q-item>
+
         <div v-if="false">
         <q-item to="/Dashboard" active-class="q-item-no-link-highlighting">
           <q-item-section avatar>
