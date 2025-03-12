@@ -11,10 +11,11 @@
   "dependencies": {
     "@quasar/cli": "^2.4.1",
     "@quasar/extras": "^1.16.11",
-    "axios": "^0.21.1",
+    "axios": "^1.7.9",
+    "bt-dash": "file:",
     "chart.js": "^4.4.3",
     "core-js": "^3.6.5",
-    "quasar": "^2.16.4",
+    "quasar": "^2.17.7",
     "vue": "^3.0.0",
     "vue-chartjs": "^5.3.1",
     "vue-i18n": "^9.0.0",
