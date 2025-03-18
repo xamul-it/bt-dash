@@ -188,7 +188,7 @@ const openDialog = (row) => {
   const parts = lab.split('.');
   const str = parts.slice(-1)[0];
   title.value = "Factsheet " + str
-  src.value = constants.API_BASE_URL + (row.pinned ? "/fs/data/stored/" : "/out/") + str + "/" + row.id + "/stats.html"
+  src.value = constants.API_BASE_URL + (row.pinned ? "/fs/data/stored/" : "/fs/out/") + str + "/" + row.id + "/stats.html"
   dialogVisible.value = true;
 
 };
