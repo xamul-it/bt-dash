@@ -37,8 +37,6 @@
 
     <div>
       <q-card flat bordered>
-
-
         <q-splitter v-model="splitterModel" :limits="[50, 100]" :disable="splitterDisable" class="desktop-only">
           <template v-slot:before>
             <div class="row q-col-gutter-lg q-pa-md">
@@ -102,7 +100,6 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-s
   </q-page>
 </template>
 

@@ -2,11 +2,8 @@
   <div class="q-pa-sm">
 
     <div class="row q-col-gutter-md">
-
       <table-data-api tableTitle="Orders" :apiURL="tickerPath+constants.API_ORDERS_FILE" :jsonDataPath="['data']"></table-data-api>
-
       <table-data-api tableTitle="Positions" :apiURL="tickerPath+constants.API_POSITIONS_FILE" :jsonDataPath="['data']"></table-data-api>
-
       <table-data-api tableTitle="Today" :apiURL="tickerPath+constants.API_TODAY_FILE" :jsonDataPath="['data']"></table-data-api>
 
     </div>
@@ -36,12 +33,13 @@ export default defineComponent({
             return constants.API_BACKUP_FOLDER+'/'+routeParamsRef.value.param+constants.API_BACKUP_BASE_FOLDER+'/'+routeParamsRef.value.ticker
           }else {
             if (routeParamsRef.value.status=='pin')
-              return constants.API_BASE_URL + "/config/stored/"+routeParamsRef.value.ticker+'/'+routeParamsRef.value.param
+              return constants.API_BASE_URL+"/fs/data/stored/"+routeParamsRef.value.ticker+'/'+routeParamsRef.value.param
             else
-              return constants.API_BASE_FOLDER+routeParamsRef.value.ticker+'/'+routeParamsRef.value.param
+              return constants.API_BASE_FOLDER+"/"+routeParamsRef.value.ticker+'/'+routeParamsRef.value.param
           }
         } else {
-          return constants.API_BASE_URL+'/config/schedule/'+routeParamsRef.value.ticker
+          console.error(routeParamsRef.value.ticker)
+          return constants.API_BASE_URL+'/fs/data/schedule/'+routeParamsRef.value.ticker
         }
       }
     )
