@@ -61,8 +61,6 @@
           <q-td :props="props">
             <q-btn icon="timer" size="sm" class="q-ml-sm" flat dense @click="schedule(props.row)" v-if="props.row.end"/>
             <q-btn :icon="props.row.pinned ? 'remove' : 'add '" size="sm" class="q-ml-sm" flat dense @click="pin_switch(props.row)" v-if="props.row.end"/>
-            <q-btn icon="history" size="sm" class="q-ml-sm" flat dense @click="openOrderHistoryModal(props.row)" v-if="props.row.end"/>
-            
             <q-btn icon="candlestick_chart" size="sm" class="q-ml-sm" flat dense @click="candle(props.row)" v-if="props.row.end"/>
             <q-btn icon="insights" size="sm" flat dense @click="openDialog(props.row)" v-if="props.row.end"/>
             <q-btn icon="delete" size="sm" class="q-ml-sm" flat dense @click="remove(props.row)" v-if="props.row.stato !== 'In esecuzione'"/>
@@ -89,21 +87,11 @@
 </q-dialog>
 
 <q-dialog v-model="isLightboxOpen">
-    <q-card class="full-width" maximized="maximized">
+    <q-card>
       <q-card-section>
         <strategy-form @form-submitted="handleFormSubmitted" ref="strategyFormRef"/>
       </q-card-section>
     </q-card>
-</q-dialog>
-
-<!-- Finestra modale -->
-<q-dialog v-model="storicoVisible" class="full-width q-pa-md" transition-show="" transition-hide="" content-class="width-auto">
-  <q-card maximized="maximized">
-  <OrderHistory  :url="orderHistoryUrl"/>
-  <q-card-actions align="right">
-        <q-btn flat label="Chiudi" color="primary" @click="storicoVisible = false" />
-      </q-card-actions>
-  </q-card>
 </q-dialog>
 
 <ScheduleDialog ref="scheduleDialog" @confirm-schedule="handleSchedule"/>
@@ -124,12 +112,6 @@
     max-width: 1100px;
     box-sizing: border-box;
   }
-  .q-dialog__inner--minimized {
-    width: auto !important;
-  }
-  .width-auto {
-  width: auto !important;
-}
 </style>
 
 <script>
@@ -138,7 +120,6 @@ import useFormatEuro from '../../composables/useFormatEuro';
 import useFormatTS from '../../composables/useFormatTS';
 import StrategyForm from 'src/bt/components/StrategyForm';
 import ScheduleDialog from 'src/bt/components/ScheduleDialog';
-import OrderHistory from 'src/bt/components/OrderHistory';
 
 import axios from 'axios'
 import { constants } from 'boot/constants'
@@ -147,8 +128,6 @@ import { Notify } from 'quasar'; // Importa Notify da Quasar
 
 //Finestra non visibile
 const dialogVisible = ref(false);
-const storicoVisible = ref(false);
-const orderHistoryUrl = ref("");
 const title = ref('Titolo Dialog'); // Example title variable
 const src = ref('example-url'); // Example URL variable
 
@@ -209,7 +188,7 @@ const openDialog = (row) => {
   const parts = lab.split('.');
   const str = parts.slice(-1)[0];
   title.value = "Factsheet " + str
-  src.value = constants.API_BASE_URL + (row.pinned ? "/fs/data/stored/" : "/fs/out/") + str + "/" + row.id + "/stats.html"
+  src.value = constants.API_BASE_URL + (row.pinned ? "/config/stored/" : "/out/") + str + "/" + row.id + "/stats.html"
   dialogVisible.value = true;
 
 };
@@ -221,22 +200,13 @@ const candle = (row) => {
   const parts = lab.split('.');
   const str = parts.slice(-1)[0];
   title.value = "Posizione " + str
-  
-  src.value = "#/details/" + str + "/" + row.id
+  src.value = "/#/details/" + str + "/" + row.id
   if (row.pinned)
     src.value += "/pin"
   dialogVisible.value = true;
 
 };
 
-const openOrderHistoryModal = (row) => {
-  //orderHistoryUrl.value = `/api/orders/${row.id}`;
-  const lab = row.args.strategia.label
-  const parts = lab.split('.');
-  const str = parts.slice(-1)[0];
-  orderHistoryUrl.value = constants.API_BASE_URL + (row.pinned ? "/fs/data/stored/" : "/fs/out/") + str + "/" + row.id + "/orderhistory.json"
-  storicoVisible.value = true; // Apri la modale
-}
 
 const pin_switch = async (row) => {
   // Split the string based on the dot (.) character
@@ -313,8 +283,7 @@ const getStatusIcon = (status) => {
   name: "TableActions",
   components: {
     StrategyForm,
-    ScheduleDialog,
-    OrderHistory
+    ScheduleDialog
   },
   methods: {
     schedule(row) {
@@ -378,11 +347,12 @@ const getStatusIcon = (status) => {
       strategyFormRef,
       formatEuro,
       formatTS,
-      candle,
-      storicoVisible,
-      orderHistoryUrl,
-      openOrderHistoryModal,
+      candle
     }
   }
 })
 </script>
+
+<style scoped>
+
+</style>
