@@ -4,7 +4,7 @@
       <div class="row items-center q-col-gutter-md">
         <div class="col">
           <div class="text-h5">Watchtower</div>
-          <div class="text-caption text-grey-7">Monitoraggio servizi, integrità esecutiva e coerenza statistica</div>
+          <div class="text-caption text-grey-7">Integrità esecutiva e coerenza statistica</div>
           <div class="text-caption text-grey-6" v-if="lastRefreshAt">
             Ultimo refresh: {{ formatDateTime(lastRefreshAt) }}
           </div>
@@ -23,6 +23,19 @@
               emit-value
               map-options
               style="min-width: 280px"
+              @update:model-value="handleWindowChange"
+            />
+          </div>
+          <div class="col-auto">
+            <q-select
+              v-model="selectedPortfolioKeyId"
+              :options="portfolioOptions"
+              label="Portfolio Alpaca"
+              dense
+              outlined
+              emit-value
+              map-options
+              style="min-width: 260px"
               @update:model-value="refreshAll"
             />
           </div>
@@ -47,10 +60,24 @@
             />
           </div>
           <div class="col-auto">
+            <q-btn
+              color="primary"
+              icon="table_view"
+              label="Export Excel"
+              :loading="isExportingBars"
+              :disable="!selectedWindowOpen || isRefreshing"
+              @click="exportBars"
+            />
+          </div>
+          <div class="col-auto">
             <q-btn color="primary" icon="refresh" label="Refresh" :loading="isRefreshing" @click="refreshAll" />
           </div>
         </div>
       </div>
+    </div>
+
+    <div v-if="selectedPortfolioSummary" class="text-caption text-grey-7 q-mb-md">
+      {{ selectedPortfolioSummary }}
     </div>
 
     <div v-if="isSyncingAlpaca || alpacaSyncStatus" class="q-mb-md">
@@ -77,101 +104,6 @@
         </q-card-section>
       </q-card>
     </div>
-
-    <q-card flat bordered class="q-mb-lg">
-      <q-card-section class="row items-center q-col-gutter-md watchtower-section-header cursor-pointer" @click="servicesExpanded = !servicesExpanded">
-        <div class="col">
-          <div class="text-h6">Servizi osservati</div>
-          <div class="text-caption text-grey-7">
-            {{ serviceConfig.length }} servizi monitorati
-          </div>
-        </div>
-        <div class="col-auto row items-center q-gutter-sm no-wrap">
-          <q-badge color="positive">{{ activeServicesCount }}</q-badge>
-          <q-badge color="warning">{{ degradedServicesCount }}</q-badge>
-          <q-badge color="negative">{{ failedServicesCount }}</q-badge>
-          <q-btn
-            flat
-            round
-            dense
-            :icon="servicesExpanded ? 'expand_less' : 'expand_more'"
-            @click.stop="servicesExpanded = !servicesExpanded"
-          />
-        </div>
-      </q-card-section>
-
-      <q-slide-transition>
-        <div v-show="servicesExpanded">
-          <q-separator />
-          <q-card-section class="row q-col-gutter-md items-end">
-            <div class="col-12 col-lg-9">
-              <q-select
-                v-model="serviceConfig"
-                :options="serviceOptions"
-                label="Observed systemd services"
-                multiple
-                use-chips
-                use-input
-                new-value-mode="add-unique"
-                dense
-                outlined
-                emit-value
-                map-options
-              />
-            </div>
-            <div class="col-12 col-lg-3">
-              <q-btn color="primary" label="Save services" @click.stop="saveServiceConfig" />
-            </div>
-          </q-card-section>
-          <q-card-section class="text-caption text-grey-7">
-            Config file: {{ serviceConfigPath || 'default' }}
-          </q-card-section>
-          <q-card-section class="q-pt-none">
-            <div class="row q-col-gutter-md">
-              <div class="col-12 col-md-6 col-lg-3" v-for="service in services" :key="service.name">
-                <q-card flat bordered class="service-card">
-                  <q-card-section class="row items-center q-pa-sm">
-                    <div class="col">
-                      <div class="text-body2 text-weight-medium">{{ service.name }}</div>
-                      <div class="text-caption">
-                        load: {{ service.load }} | active: {{ service.active }}/{{ service.sub }} | enabled: {{ service.enabled }}
-                      </div>
-                      <div class="text-caption text-grey-7" v-if="service.description">{{ service.description }}</div>
-                    </div>
-                    <div class="col-auto">
-                      <q-badge :color="serviceBadgeColor(service)">
-                        {{ serviceStatusLabel(service) }}
-                      </q-badge>
-                    </div>
-                  </q-card-section>
-                  <q-card-actions align="right" class="q-pa-xs">
-                    <q-btn flat dense size="sm" label="Start" @click.stop="serviceAction(service.name, 'start')" />
-                    <q-btn flat dense size="sm" label="Stop" @click.stop="serviceAction(service.name, 'stop')" />
-                    <q-btn flat dense size="sm" label="Restart" @click.stop="serviceAction(service.name, 'restart')" />
-                  </q-card-actions>
-                </q-card>
-              </div>
-            </div>
-          </q-card-section>
-        </div>
-      </q-slide-transition>
-
-      <q-card-section v-if="!servicesExpanded" class="q-pt-none">
-        <div class="row q-col-gutter-sm">
-          <div class="col-auto" v-for="service in services" :key="`compact-${service.name}`">
-            <div class="service-pill">
-              <q-icon
-                name="circle"
-                size="10px"
-                :color="serviceBadgeColor(service)"
-                class="q-mr-xs"
-              />
-              <span class="service-pill-name">{{ compactServiceName(service.name) }}</span>
-            </div>
-          </div>
-        </div>
-      </q-card-section>
-    </q-card>
 
     <q-card flat bordered class="q-mb-lg">
       <q-card-section>
@@ -646,10 +578,6 @@ import { Notify } from 'quasar'
 export default defineComponent({
   name: 'WatchtowerPage',
   setup() {
-    const services = ref([])
-    const serviceConfig = ref([])
-    const availableServices = ref([])
-    const serviceConfigPath = ref('')
     const runs = ref([])
     const watchtower = ref([])
     const watchtowerOverview = ref(null)
@@ -659,16 +587,19 @@ export default defineComponent({
     const baselineCatalog = ref([])
     const watchtowerWindows = ref([])
     const selectedWindowOpen = ref(null)
+    const portfolioContexts = ref([])
+    const selectedPortfolioKeyId = ref(null)
+    const portfolioSession = ref(null)
     const selectedRun = ref(null)
     const showDialog = ref(false)
     const showMetricDialog = ref(false)
     const metricDialogState = ref({ title: '', subtitle: '', rows: [] })
-    const servicesExpanded = ref(false)
     const openNonExecutedExpanded = ref(false)
     const openExecutedExpanded = ref(false)
     const isRefreshing = ref(false)
     const isRebuilding = ref(false)
     const isSyncingAlpaca = ref(false)
+    const isExportingBars = ref(false)
     const alpacaSyncStatus = ref(null)
     const alpacaSyncPollTimer = ref(null)
     const lastRefreshAt = ref(null)
@@ -828,9 +759,26 @@ export default defineComponent({
     const selectedWindowSummary = computed(() => (
       selectedWindowMeta.value ? formatWindowSummary(selectedWindowMeta.value) : ''
     ))
-    const activeServicesCount = computed(() => services.value.filter((service) => service.active === 'active').length)
-    const failedServicesCount = computed(() => services.value.filter((service) => !service.exists || service.active === 'failed').length)
-    const degradedServicesCount = computed(() => Math.max(services.value.length - activeServicesCount.value - failedServicesCount.value, 0))
+    const portfolioOptions = computed(() => (
+      ((portfolioContexts.value || []).map((row) => ({
+        label: `${row.display_name || row.portfolio_key_id} · ${row.chain_run_count || 0} run`,
+        value: row.portfolio_key_id
+      })))
+    ))
+    const selectedPortfolioContext = computed(() => (
+      (portfolioContexts.value || []).find((row) => row.portfolio_key_id === selectedPortfolioKeyId.value) || null
+    ))
+    const selectedPortfolioSummary = computed(() => {
+      const session = portfolioSession.value
+      if (session?.portfolio_display_name) {
+        return `${session.portfolio_display_name} · ${session.chain_run_count || 0} run nella finestra`
+      }
+      const context = selectedPortfolioContext.value
+      if (context?.display_name) {
+        return `${context.display_name} · ${context.chain_run_count || 0} run nella finestra`
+      }
+      return ''
+    })
     const watchtowerLatest = computed(() => watchtower.value?.[0] || null)
     const integrityTotals = computed(() => watchtowerOverview.value?.totals || {})
     const integrityGroups = computed(() => watchtowerOverview.value?.groups || {
@@ -957,7 +905,7 @@ export default defineComponent({
 
     // --- Righe quadratura conteggi ---
     const openSummaryRows = computed(() => [
-      { key: 'submitted', label: 'Inviate', sim: simOperationRow.value.open_submitted, paper: paperOperationRow.value.open_submitted, alpaca: alpacaOperationRow.value.open_submitted },
+      { key: 'submitted', label: 'Pending (barra invio)', sim: simOperationRow.value.open_submitted, paper: paperOperationRow.value.open_submitted, alpaca: alpacaOperationRow.value.open_submitted },
       { key: 'non_executed', label: 'Non eseguite', sim: summarizeOpenNonExecuted(simOperationRow.value), paper: summarizeOpenNonExecuted(paperOperationRow.value), alpaca: summarizeOpenNonExecuted(alpacaOperationRow.value) },
       { key: 'open_executed', label: 'Eseguite', sim: summarizeOpenExecuted(simOperationRow.value), paper: summarizeOpenExecuted(paperOperationRow.value), alpaca: summarizeOpenExecuted(alpacaOperationRow.value) },
       { key: 'accounting_delta', label: 'Quadratura contabile', sim: summarizeOpenAccountingDelta(simOperationRow.value), paper: summarizeOpenAccountingDelta(paperOperationRow.value), alpaca: summarizeOpenAccountingDelta(alpacaOperationRow.value), emphasizeNonZero: true },
@@ -974,7 +922,7 @@ export default defineComponent({
       { key: 'open_partial', label: 'Partial', sim: simOperationRow.value.open_partial || 0, paper: paperOperationRow.value.open_partial || 0, alpaca: alpacaOperationRow.value.open_partial || 0 },
     ])
     const closeSummaryRows = computed(() => [
-      { key: 'submitted', label: 'Inviate', sim: simOperationRow.value.close_submitted, paper: paperOperationRow.value.close_submitted, alpaca: alpacaOperationRow.value.close_submitted },
+      { key: 'submitted', label: 'Pending (barra invio)', sim: simOperationRow.value.close_submitted, paper: paperOperationRow.value.close_submitted, alpaca: alpacaOperationRow.value.close_submitted },
       { key: 'initial_flatten_close_completed', label: 'Flat iniziale', sim: simOperationRow.value.initial_flatten_close_completed || 0, paper: paperOperationRow.value.initial_flatten_close_completed || 0, alpaca: alpacaOperationRow.value.initial_flatten_close_completed || 0 },
       { key: 'completed', label: 'Eseguite', sim: simOperationRow.value.close_completed, paper: paperOperationRow.value.close_completed, alpaca: alpacaOperationRow.value.close_completed },
       { key: 'residual_vs_open', label: 'Residuo vs open eseguite', sim: summarizeCloseResidual(simOperationRow.value), paper: summarizeCloseResidual(paperOperationRow.value), alpaca: summarizeCloseResidual(alpacaOperationRow.value) },
@@ -1321,13 +1269,6 @@ export default defineComponent({
       if (!items.length) return 'flat'
       return items.map(([symbol, qty]) => `${symbol}:${formatNumber(qty, 4)}`).join(' | ')
     }
-    const serviceOptions = computed(() => (
-      availableServices.value.map((service) => ({
-        label: service.description ? `${service.name} - ${service.description}` : service.name,
-        value: service.name
-      }))
-    ))
-
     const statusColor = (status) => {
       switch (status) {
         case 'Completato':
@@ -1404,22 +1345,6 @@ export default defineComponent({
       if (severity === 'negative') return 'error'
       return 'warning'
     }
-
-    const serviceBadgeColor = (service) => {
-      if (!service?.exists) return 'negative'
-      if (service.active === 'active') return 'positive'
-      if (service.active === 'failed') return 'negative'
-      return 'warning'
-    }
-
-    const serviceStatusLabel = (service) => {
-      if (!service?.exists) return 'not-found'
-      return service.sub && service.sub !== service.active
-        ? `${service.active}/${service.sub}`
-        : service.active
-    }
-
-    const compactServiceName = (name) => String(name || '').replace(/\.service$/, '')
 
     const formatNumber = (value, digits = 2) => {
       const num = Number(value)
@@ -1584,9 +1509,23 @@ export default defineComponent({
     }
 
     const windowedPath = (path) => {
-      if (!selectedWindowOpen.value) return path
+      const params = []
+      if (selectedWindowOpen.value) {
+        params.push(`window_open=${encodeURIComponent(selectedWindowOpen.value)}`)
+      }
+      if (selectedPortfolioKeyId.value) {
+        params.push(`portfolio_key_id=${encodeURIComponent(selectedPortfolioKeyId.value)}`)
+      }
+      if (!params.length) return path
       const separator = path.includes('?') ? '&' : '?'
-      return `${path}${separator}window_open=${encodeURIComponent(selectedWindowOpen.value)}`
+      return `${path}${separator}${params.join('&')}`
+    }
+
+    const handleWindowChange = (value) => {
+      selectedWindowOpen.value = value
+      selectedPortfolioKeyId.value = null
+      portfolioSession.value = null
+      refreshAll()
     }
 
     const refreshAll = async () => {
@@ -1604,9 +1543,26 @@ export default defineComponent({
           selectedWindowOpen.value = watchtowerWindows.value[0]?.window_open || null
         }
 
+        if (selectedWindowOpen.value) {
+          portfolioContexts.value = await fetchJson('/dyn/obs/watchtower/portfolio-contexts?window_open=' + encodeURIComponent(selectedWindowOpen.value))
+          if (!portfolioContexts.value.length) {
+            selectedPortfolioKeyId.value = null
+          } else if (
+            !selectedPortfolioKeyId.value
+            || !portfolioContexts.value.some((row) => row.portfolio_key_id === selectedPortfolioKeyId.value)
+          ) {
+            selectedPortfolioKeyId.value = portfolioContexts.value[0].portfolio_key_id
+          }
+          portfolioSession.value = selectedPortfolioKeyId.value
+            ? await fetchJson(windowedPath('/dyn/obs/watchtower/portfolio-session'))
+            : null
+        } else {
+          portfolioContexts.value = []
+          selectedPortfolioKeyId.value = null
+          portfolioSession.value = null
+        }
+
         const requests = await Promise.allSettled([
-          fetchJson('/dyn/obs/services'),
-          fetchJson('/dyn/obs/services-config'),
           fetchJson('/dyn/obs/runs'),
           fetchJson('/dyn/obs/watchtower/baselines?limit=10'),
           fetchJson(windowedPath('/dyn/obs/watchtower')),
@@ -1624,17 +1580,11 @@ export default defineComponent({
           failures.push(`${label}: ${result.reason?.message || result.reason || 'unknown error'}`)
         }
 
-        applyResult(0, (data) => { services.value = data }, 'services')
-        applyResult(1, (data) => {
-          serviceConfig.value = data.services || []
-          availableServices.value = data.available || []
-          serviceConfigPath.value = data.config_path || ''
-        }, 'services-config')
-        applyResult(2, (data) => { runs.value = data }, 'runs')
-        applyResult(3, (data) => { baselineCatalog.value = Array.isArray(data) ? data : [] }, 'baselines')
-        applyResult(4, (data) => { watchtower.value = data }, 'watchtower')
-        applyResult(5, (data) => { watchtowerOverview.value = data }, 'watchtower-overview')
-        applyResult(6, (data) => {
+        applyResult(0, (data) => { runs.value = data }, 'runs')
+        applyResult(1, (data) => { baselineCatalog.value = Array.isArray(data) ? data : [] }, 'baselines')
+        applyResult(2, (data) => { watchtower.value = data }, 'watchtower')
+        applyResult(3, (data) => { watchtowerOverview.value = data }, 'watchtower-overview')
+        applyResult(4, (data) => {
           coherenceSummary.value = data
           factsheet.value = data?.factsheet || null
         }, 'coherence-summary')
@@ -1735,7 +1685,8 @@ export default defineComponent({
       isSyncingAlpaca.value = true
       try {
         const response = await axios.post(`${constants.API_BASE_URL}/dyn/obs/watchtower/alpaca-sync`, {
-          window_open: selectedWindowOpen.value
+          window_open: selectedWindowOpen.value,
+          portfolio_key_id: selectedPortfolioKeyId.value || null
         })
         alpacaSyncStatus.value = response.data
         await pollAlpacaSync(response.data.job_id)
@@ -1749,20 +1700,6 @@ export default defineComponent({
           type: 'negative',
           message: `Sync Alpaca fallita: ${message}`
         })
-      }
-    }
-
-    const saveServiceConfig = async () => {
-      try {
-        const response = await axios.put(`${constants.API_BASE_URL}/dyn/obs/services-config`, {
-          services: serviceConfig.value
-        })
-        serviceConfig.value = response.data.services || []
-        serviceConfigPath.value = response.data.config_path || ''
-        Notify.create({ type: 'positive', message: 'Services configuration updated' })
-        await refreshAll()
-      } catch (error) {
-        Notify.create({ type: 'negative', message: `Services config error: ${error?.message || error}` })
       }
     }
 
@@ -1826,20 +1763,54 @@ export default defineComponent({
       }
     }
 
-    const serviceAction = async (service, action) => {
+    const exportBars = async () => {
+      if (!selectedWindowOpen.value) {
+        Notify.create({ type: 'warning', message: 'Seleziona una finestra' })
+        return
+      }
+      isExportingBars.value = true
       try {
-        const response = await axios.post(`${constants.API_BASE_URL}/dyn/obs/services/${service}/${action}`)
-        Notify.create({ type: 'positive', message: `${service}: ${action}` })
-        if (response?.data?.stderr) {
-          Notify.create({ type: 'warning', message: `${service}: ${response.data.stderr}` })
-        }
-        await refreshAll()
+        const response = await axios.get(`${constants.API_BASE_URL}/dyn/obs/watchtower/export-bars`, {
+          params: {
+            window_open: selectedWindowOpen.value,
+            portfolio_key_id: selectedPortfolioKeyId.value || undefined
+          },
+          responseType: 'blob'
+        })
+        const disposition = String(response.headers?.['content-disposition'] || '')
+        const filenameMatch = disposition.match(/filename=([^;]+)/i)
+        const serverFilename = filenameMatch?.[1]?.trim()?.replace(/^"|"$/g, '')
+        const blob = new Blob(
+          [response.data],
+          { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+        )
+        const url = window.URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = serverFilename || `watchtower-bars-${selectedWindowOpen.value}.xlsx`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.URL.revokeObjectURL(url)
       } catch (error) {
-        const message = error?.response?.data?.stderr
-          || error?.response?.data?.error
-          || error?.message
-          || 'request failed'
-        Notify.create({ type: 'negative', message: `${service}: ${action} failed - ${message}` })
+        let message = error?.message || String(error)
+        const payload = error?.response?.data
+        if (payload instanceof Blob) {
+          try {
+            const text = await payload.text()
+            const parsed = JSON.parse(text)
+            message = parsed?.error || parsed?.message || message
+          } catch {
+            message = message || 'export_failed'
+          }
+        } else {
+          message = error?.response?.data?.error
+            || error?.response?.data?.message
+            || message
+        }
+        Notify.create({ type: 'negative', message: `Export Excel fallito: ${message}` })
+      } finally {
+        isExportingBars.value = false
       }
     }
 
@@ -1847,11 +1818,6 @@ export default defineComponent({
     onBeforeUnmount(stopAlpacaSyncPolling)
 
     return {
-      services,
-      serviceConfig,
-      availableServices,
-      serviceConfigPath,
-      serviceOptions,
       runs,
       watchtower,
       watchtowerOverview,
@@ -1861,12 +1827,18 @@ export default defineComponent({
       baselineCatalog,
       watchtowerWindows,
       selectedWindowOpen,
+      portfolioContexts,
+      selectedPortfolioKeyId,
+      portfolioOptions,
+      portfolioSession,
+      selectedPortfolioSummary,
       windowOptions,
       selectedWindowMeta,
       selectedWindowSummary,
       isRefreshing,
       isRebuilding,
       isSyncingAlpaca,
+      isExportingBars,
       lastRefreshAt,
       alpacaSyncStatus,
       baselineSourcePathsText,
@@ -1924,13 +1896,9 @@ export default defineComponent({
       metricDialogRows,
       metricDialogTitle,
       metricDialogSubtitle,
-      servicesExpanded,
       openNonExecutedExpanded,
       openExecutedExpanded,
       watchtowerLatest,
-      activeServicesCount,
-      degradedServicesCount,
-      failedServicesCount,
       openSummaryRows,
       openDetailRows,
       openExecutedDetailRows,
@@ -1957,18 +1925,15 @@ export default defineComponent({
       rebuildWindow,
       computeBaseline,
       syncAlpacaWindow,
+      exportBars,
       refreshAll,
-      saveServiceConfig,
+      handleWindowChange,
       showRun,
-      serviceAction,
       statusColor,
       coherenceStatusColor,
       coherenceStatusLabel,
       coherenceSeverityColor,
       coherenceSeverityIcon,
-      serviceBadgeColor,
-      serviceStatusLabel,
-      compactServiceName,
       formatNumber,
       formatInteger,
       formatDateTime,
@@ -2011,24 +1976,6 @@ export default defineComponent({
   backdrop-filter: blur(8px);
   padding: 12px 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.watchtower-section-header {
-  user-select: none;
-}
-
-.service-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.02);
-  font-size: 0.85rem;
-}
-
-.service-pill-name {
-  white-space: nowrap;
 }
 
 .watchtower-grid {

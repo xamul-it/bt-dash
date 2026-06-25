@@ -1,8 +1,6 @@
 
 const constants = {
-  //const apiBaseUrl = process.env.VUE_APP_API_URL;
-  API_BASE_URL: process.env.VUE_APP_API_URL,  
-  //API_BASE_URL: 'http://localhost:9090',
+  API_BASE_URL: process.env.VUE_APP_API_URL || '/api',
   API_BASE_FOLDER: '/out',
   API_BACKUP_FOLDER: '/backup',
   API_BACKUP_BASE_FOLDER: '/out',

@@ -22,7 +22,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import { api } from 'boot/axios';
 import TradingButton from './Cerebro.vue'; // Modifica il percorso in base alla tua struttura
 
 export default {
@@ -40,7 +40,7 @@ export default {
 
         onMounted(async () => {
             try {
-                const response = await axios.get('http://localhost:5001/dyn/al/portfolio');
+                const response = await api.get('/dyn/al/portfolio');
                 portfolio.value = response.data.positions;
                 account.value = response.data.account;
             } catch (error) {

@@ -83,14 +83,28 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/Watchtower" active-class="q-item-no-link-highlighting">
-          <q-item-section avatar>
-            <q-icon name="monitor_heart"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Watchtower</q-item-label>
-          </q-item-section>
-        </q-item>
+        <q-expansion-item
+          icon="monitor_heart"
+          label="Watchtower"
+          :default-opened="isWatchtowerRoute"
+          expand-separator
+        >
+          <q-item to="/Watchtower" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+            <q-item-section>
+              <q-item-label>Overview</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item to="/Watchtower/FeedMonitoring" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+            <q-item-section>
+              <q-item-label>Feed Monitoring</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item to="/Watchtower/ServiceMonitoring" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+            <q-item-section>
+              <q-item-label>Service Monitoring</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-expansion-item>
 
         <!-- Riga di separazione -->
         <q-separator />
@@ -189,7 +203,8 @@
 <script>
 import EssentialLink from 'components/EssentialLink.vue'
 
-import { defineComponent, ref } from 'vue'
+import { computed, defineComponent, ref } from 'vue'
+import { useRoute } from 'vue-router'
 
 export default defineComponent({
   name: 'MainLayout',
@@ -199,9 +214,12 @@ export default defineComponent({
   },
 
   setup () {
+    const route = useRoute()
     const leftDrawerOpen = ref(false)
+    const isWatchtowerRoute = computed(() => String(route.path || '').startsWith('/Watchtower'))
 
     return {
+      isWatchtowerRoute,
       leftDrawerOpen,
       toggleLeftDrawer () {
         leftDrawerOpen.value = !leftDrawerOpen.value

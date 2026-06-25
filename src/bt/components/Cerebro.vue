@@ -8,8 +8,8 @@
 </template>
   
   <script>
-  import { ref, computed } from 'vue';
-  import axios from 'axios';
+  import { ref } from 'vue';
+  import { api } from 'boot/axios';
   
   export default {
     setup() {
@@ -20,7 +20,7 @@
       // Funzione per aggiornare lo stato
       const fetchStatus = async () => {
         try {
-          const response = await axios.get('http://localhost:5001/dyn/al/status');
+          const response = await api.get('/dyn/al/status');
           status.value = response.data.status;
   
           // Aggiorna le condizioni dei bottoni
@@ -34,7 +34,7 @@
       // Funzione per avviare il trading
       const startTrading = async () => {
         try {
-          await axios.post('http://localhost:5001/dyn/al/start');
+          await api.post('/dyn/al/start');
           await fetchStatus(); // Aggiorna lo stato dopo l'avvio
         } catch (error) {
           console.error("Errore nell'avvio del trading:", error);
@@ -44,7 +44,7 @@
       // Funzione per fermare il trading
       const stopTrading = async () => {
         try {
-          await axios.post('http://localhost:5001/dyn/al/stop');
+          await api.post('/dyn/al/stop');
           await fetchStatus(); // Aggiorna lo stato dopo la fermata
         } catch (error) {
           console.error("Errore nella fermata del trading:", error);
