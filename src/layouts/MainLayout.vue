@@ -84,9 +84,32 @@
         </q-item>
 
         <q-expansion-item
+          icon="event_repeat"
+          label="Strategie Schedulate"
+          :default-opened="isScheduledRoute"
+          expand-separator
+        >
+          <q-item to="/Watchtower/CronMonitoring" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+            <q-item-section>
+              <q-item-label>Profili Cron</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item to="/ScheduledProfiles/Configuration" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+            <q-item-section>
+              <q-item-label>Configurazione</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item to="/ScheduledProfiles/Baselines" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+            <q-item-section>
+              <q-item-label>Gestione baseline</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-expansion-item>
+
+        <q-expansion-item
           icon="monitor_heart"
-          label="Watchtower"
-          :default-opened="isWatchtowerRoute"
+          label="Strategie Intraday"
+          :default-opened="isIntradayRoute"
           expand-separator
         >
           <q-item to="/Watchtower" active-class="q-item-no-link-highlighting" class="q-pl-xl">
@@ -216,10 +239,21 @@ export default defineComponent({
   setup () {
     const route = useRoute()
     const leftDrawerOpen = ref(false)
-    const isWatchtowerRoute = computed(() => String(route.path || '').startsWith('/Watchtower'))
+    const currentPath = computed(() => String(route.path || ''))
+    // "Profili Cron" vive ancora sotto la route /Watchtower/CronMonitoring ma
+    // concettualmente appartiene al gruppo "Strategie Schedulate".
+    const isScheduledRoute = computed(
+      () => currentPath.value.startsWith('/ScheduledProfiles')
+        || currentPath.value === '/Watchtower/CronMonitoring'
+    )
+    const isIntradayRoute = computed(
+      () => currentPath.value.startsWith('/Watchtower')
+        && currentPath.value !== '/Watchtower/CronMonitoring'
+    )
 
     return {
-      isWatchtowerRoute,
+      isScheduledRoute,
+      isIntradayRoute,
       leftDrawerOpen,
       toggleLeftDrawer () {
         leftDrawerOpen.value = !leftDrawerOpen.value

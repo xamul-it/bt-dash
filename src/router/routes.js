@@ -10,8 +10,11 @@ const routes = [
       { path: '/ExecuteStrategy', component: () => import('src/bt/pages/ExecuteStrategy.vue')},
       { path: '/Scheduler', component: () => import('src/bt/pages/Scheduler.vue')},
       { path: '/Watchtower', component: () => import('src/bt/pages/Watchtower.vue')},
+      { path: '/Watchtower/CronMonitoring', component: () => import('src/bt/pages/WatchtowerCronMonitoring.vue')},
       { path: '/Watchtower/FeedMonitoring', component: () => import('src/bt/pages/WatchtowerFeedMonitoring.vue')},
       { path: '/Watchtower/ServiceMonitoring', component: () => import('src/bt/pages/WatchtowerServiceMonitoring.vue')},
+      { path: '/ScheduledProfiles/Configuration', component: () => import('src/bt/pages/ScheduledProfileConfiguration.vue')},
+      { path: '/ScheduledProfiles/Baselines', component: () => import('src/bt/pages/ProfileBaselineManager.vue')},
       { path: '/Alpaca', component: () => import('src/bt/pages/Alpaca.vue')},
 
       { path: '/Dashboard', component: () => import('src/bt/pages/Index.vue')},
