@@ -220,6 +220,19 @@
               <q-td key="status" :props="props">
                 <q-badge :color="props.row.badgeColor">{{ props.row.statusLabel }}</q-badge>
               </q-td>
+              <q-td key="day_return" :props="props">
+                <div v-if="props.row.raw" class="day-return">
+                  <span class="day-return__tag">BT</span>
+                  <span class="day-return__val" :class="pctClass(daySummary(props.row.raw).bt_day_return_pct)">
+                    {{ fmtDayRet(daySummary(props.row.raw).bt_day_return_pct) }}
+                  </span>
+                  <span class="day-return__tag">Alpaca</span>
+                  <span class="day-return__val" :class="pctClass(daySummary(props.row.raw).live_day_return_pct)">
+                    {{ fmtDayRet(daySummary(props.row.raw).live_day_return_pct) }}
+                  </span>
+                </div>
+                <span v-else class="text-grey-5">—</span>
+              </q-td>
               <q-td key="detail" :props="props">{{ props.row.detail }}</q-td>
             </q-tr>
 
@@ -258,40 +271,40 @@
                       >{{ line.text }}</li>
                     </ul>
 
-                    <div class="diff-scroll">
-                      <table class="diff-table q-mt-sm">
-                        <thead>
-                          <tr>
-                            <th>Simbolo</th>
-                            <th>Backtest (qty @ prezzo)</th>
-                            <th>Reale / Alpaca (qty @ prezzo)</th>
-                            <th>Stato ordine</th>
-                            <th>Slippage</th>
-                            <th>Qty reale/BT</th>
-                            <th>Natura</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr
-                            v-for="drow in diffTableRows(props.row.raw)"
-                            :key="drow.symbol + ':' + drow.category"
-                            :class="drow.cls"
-                          >
-                            <td>{{ drow.symbol }}</td>
-                            <td>{{ drow.bt }}</td>
-                            <td>{{ drow.live }}</td>
-                            <td>{{ drow.orderStatus }}</td>
-                            <td>{{ drow.edge }}</td>
-                            <td>{{ drow.sizing }}</td>
-                            <td>{{ drow.categoryLabel }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                    <div class="sym-cards q-mt-sm">
+                      <div
+                        v-for="card in symbolCards(props.row.raw)"
+                        :key="card.symbol + ':' + card.category"
+                        class="sym-card"
+                        :class="card.cls"
+                      >
+                        <div class="sym-card__head">
+                          <span class="sym-card__symbol">{{ card.symbol }}</span>
+                          <span class="sym-card__cat">{{ card.categoryLabel }}</span>
+                        </div>
+                        <div class="sym-grid">
+                          <span class="sym-grid__corner"></span>
+                          <span class="sym-grid__col">INGRESSO</span>
+                          <span class="sym-grid__col">USCITA</span>
+                          <span class="sym-grid__col">GUAD.</span>
+
+                          <span class="sym-grid__row">Backtest</span>
+                          <span>{{ card.btEntry }}</span>
+                          <span>{{ card.btExit }}</span>
+                          <span :class="pctClass(card.btPctRaw)">{{ card.btPct || '—' }}</span>
+
+                          <span class="sym-grid__row">Alpaca</span>
+                          <span>{{ card.liveEntry }}</span>
+                          <span>{{ card.liveExit }}</span>
+                          <span :class="pctClass(card.livePctRaw)">{{ card.livePct || '—' }}</span>
+                        </div>
+                        <div v-if="card.footer" class="sym-card__foot">{{ card.footer }}</div>
+                      </div>
                     </div>
 
-                    <div class="text-caption text-grey-6 q-mt-xs">
+                    <div class="text-caption text-grey-6 q-mt-sm">
+                      "Guad." = rendimento del round-trip (uscita vs ingresso). Prezzo di uscita backtest ricavato da pnl/size.
                       "Due strategie diverse" / contaminazione account → riquadro "Account e proprietà" sopra (guardrail).
-                      Divergenze sugli <i>exit</i> non sono coperte: il replay confronta solo gli ingressi.
                     </div>
                     <div v-if="props.row.raw.replay_outpath" class="text-caption text-grey-6">
                       Output replay: <code>{{ props.row.raw.replay_outpath }}</code>
@@ -391,6 +404,7 @@ export default {
         { name: 'expand', label: '', field: 'expand', align: 'left' },
         { name: 'trading_date', label: 'Giorno', field: 'trading_date', align: 'left' },
         { name: 'status', label: 'Esito', field: 'statusLabel', align: 'left' },
+        { name: 'day_return', label: 'Guadagno giorno', field: 'day_return', align: 'left' },
         { name: 'detail', label: 'Dettaglio', field: 'detail', align: 'left' },
       ]
     },
@@ -577,40 +591,70 @@ export default {
       }
       return CATEGORY_LABELS[cat] || cat
     },
-    diffTableRows(result) {
+    signedPct(value) {
+      if (value === null || value === undefined) return ''
+      const n = Number(value)
+      return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+    },
+    fmtDayRet(value) {
+      if (value === null || value === undefined) return '—'
+      return this.signedPct(value)
+    },
+    pctClass(value) {
+      if (value === null || value === undefined || value === '') return 'text-grey-6'
+      return Number(value) >= 0 ? 'text-positive' : 'text-negative'
+    },
+    symbolCards(result) {
       const diffs = result?.diffs || []
       const order = { never_submitted: 0, partial_fill: 1, extra_live_order: 2, matched: 4 }
       const rank = (c) => (c && c.startsWith('live_order_not_filled') ? 3 : (order[c] ?? 5))
+      const qp = (q, p) => (q == null && p == null ? '—' : `${this.qty(q)} @ ${this.num(p)}`)
       return [...diffs]
         .sort((a, b) => rank(a.category) - rank(b.category))
         .map((d) => {
           const cat = d.category || ''
-          const bt = d.bt ? `${this.qty(d.bt.bt_qty)} @ ${this.num(d.bt.bt_entry_price)}` : '—'
-          let live = '—'
-          let orderStatus = '—'
-          if (cat === 'matched' || cat === 'partial_fill' || cat === 'extra_live_order') {
-            live = d.live ? `${this.qty(d.live.filled_qty ?? d.live.qty)} @ ${this.num(d.live.filled_avg_price)}` : '—'
-            orderStatus = d.live?.status || (cat === 'partial_fill' ? 'fill parziale' : 'filled')
-          } else if (cat === 'never_submitted') {
-            live = 'nessun ordine'
-          } else if (cat.startsWith('live_order_not_filled')) {
-            const orders = Array.isArray(d.live) ? d.live : (d.live ? [d.live] : [])
-            orderStatus = orders.map((o) => o.status).filter(Boolean).join(', ') || (cat.split(':')[1] || '—')
-            live = 'non eseguito'
-          }
-          return {
+          const bt = d.bt || {}
+          const live = d.live && !Array.isArray(d.live) ? d.live : {}
+          const btPctRaw = d.bt_pnl_pct != null ? d.bt_pnl_pct : (bt.bt_pnl_pct != null ? bt.bt_pnl_pct : null)
+          const card = {
             symbol: d.symbol || '—',
-            bt,
-            live,
-            orderStatus,
-            edge: d.entry_edge_bps != null ? this.bps(d.entry_edge_bps) : '—',
-            sizing: d.sizing_ratio_live_over_bt != null
-              ? `${d.sizing_ratio_live_over_bt}×${d.sizing_divergence ? ' ⚠' : ''}`
-              : '—',
             category: cat,
             categoryLabel: this.diffCategoryLabel(cat),
-            cls: cat !== 'matched' ? 'diff-hard' : (d.sizing_divergence ? 'diff-soft' : ''),
+            cls: cat === 'matched' ? (d.sizing_divergence ? 'card-soft' : 'card-ok') : 'card-hard',
+            btEntry: bt.bt_entry_price != null ? qp(bt.bt_qty, bt.bt_entry_price) : '—',
+            btExit: bt.bt_exit_price != null ? qp(bt.bt_exit_qty != null ? bt.bt_exit_qty : bt.bt_qty, bt.bt_exit_price) : '—',
+            liveEntry: '—',
+            liveExit: '—',
+            btPctRaw,
+            btPct: this.signedPct(btPctRaw),
+            livePctRaw: d.live_pnl_pct != null ? d.live_pnl_pct : null,
+            livePct: this.signedPct(d.live_pnl_pct),
+            footer: '',
           }
+          if (cat === 'matched' || cat === 'partial_fill' || cat === 'extra_live_order') {
+            card.liveEntry = qp(live.filled_qty != null ? live.filled_qty : live.qty, live.filled_avg_price)
+            if (d.live_exit_price != null) {
+              card.liveExit = qp(d.live_exit_qty != null ? d.live_exit_qty : live.filled_qty, d.live_exit_price)
+            } else if (d.live_exit_status) {
+              card.liveExit = `uscita ${d.live_exit_status}`
+            } else {
+              card.liveExit = 'uscita non trovata'
+            }
+          } else if (cat === 'never_submitted') {
+            card.liveEntry = 'nessun ordine reale'
+          } else if (cat.startsWith('live_order_not_filled')) {
+            const orders = Array.isArray(d.live) ? d.live : (d.live ? [d.live] : [])
+            const st = orders.map((o) => o.status).filter(Boolean).join(', ') || (cat.split(':')[1] || '—')
+            card.liveEntry = `non eseguito (${st})`
+          }
+          const bits = []
+          if (cat !== 'matched') bits.push(this.diffCategoryLabel(cat))
+          if (d.entry_edge_bps != null) bits.push(`slippage ingresso ${this.bps(d.entry_edge_bps)}`)
+          if (d.sizing_ratio_live_over_bt != null) {
+            bits.push(`qty reale/BT ${d.sizing_ratio_live_over_bt}×${d.sizing_divergence ? ' ⚠ fuori banda' : ''}`)
+          }
+          card.footer = bits.join(' · ')
+          return card
         })
     },
     dayReading(result) {
@@ -693,28 +737,90 @@ export default {
 .full-height {
   height: 100%;
 }
-.diff-scroll {
-  overflow-x: auto;
+
+/* Guadagno giorno — cella di riga: due valori etichettati, a colpo d'occhio */
+.day-return {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  row-gap: 1px;
+  align-items: baseline;
+  min-width: 120px;
 }
-.diff-table {
-  border-collapse: collapse;
-  font-size: 0.78rem;
-  min-width: 640px;
+.day-return__tag {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: #888;
+  text-transform: uppercase;
 }
-.diff-table th, .diff-table td {
-  padding: 3px 10px;
+.day-return__val {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   text-align: right;
-  white-space: nowrap;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
-.diff-table th:first-child, .diff-table td:first-child,
-.diff-table th:last-child, .diff-table td:last-child {
-  text-align: left;
+
+/* Spaccato per simbolo: card con griglia ingresso/uscita/guadagno */
+.sym-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
-.diff-table tr.diff-hard td {
-  background: rgba(193, 0, 21, 0.06);
+.sym-card {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fff;
+  min-width: 300px;
+  flex: 1 1 340px;
 }
-.diff-table tr.diff-soft td {
-  background: rgba(255, 145, 0, 0.06);
+.sym-card.card-hard { border-left-color: #c10015; }
+.sym-card.card-soft { border-left-color: #f57c00; }
+.sym-card.card-ok   { border-left-color: #21ba45; }
+.sym-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sym-card__symbol {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.sym-card__cat {
+  font-size: 0.75rem;
+  color: #666;
+  text-align: right;
+}
+.sym-grid {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr 1fr 4.5rem;
+  gap: 2px 8px;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  align-items: baseline;
+}
+.sym-grid__corner { }
+.sym-grid__col {
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  color: #999;
+  text-align: right;
+}
+.sym-grid__row {
+  font-size: 0.72rem;
+  color: #888;
+  text-transform: uppercase;
+}
+.sym-grid > span:not(.sym-grid__row):not(.sym-grid__col):not(.sym-grid__corner) {
+  text-align: right;
+}
+.sym-card__foot {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 0.72rem;
+  color: #777;
 }
 </style>
