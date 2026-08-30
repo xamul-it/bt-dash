@@ -295,7 +295,7 @@
 
                           <span class="sym-grid__row">Alpaca</span>
                           <span>{{ card.liveEntry }}</span>
-                          <span>{{ card.liveExit }}</span>
+                          <span :class="{ 'text-negative text-weight-medium': card.exitBad, 'text-grey-5': card.exitStale }">{{ card.liveExit }}</span>
                           <span :class="pctClass(card.livePctRaw)">{{ card.livePct || '—' }}</span>
                         </div>
                         <div v-if="card.footer" class="sym-card__foot">{{ card.footer }}</div>
@@ -353,6 +353,14 @@ const CATEGORY_LABELS = {
   partial_fill: 'ordine reale eseguito solo parzialmente',
   extra_live_order: 'ordine reale senza corrispondenza nel backtest (possibile divergenza di segnale/dati)',
   matched: 'combacia con il backtest',
+  exit_missing: 'posizione entrata ma mai chiusa: nessun ordine di uscita reale',
+  exit_not_filled: 'ordine di uscita inviato ma non eseguito (scaduto / rifiutato / in sospeso)',
+  exit_partial_fill: 'uscita eseguita solo in parte: posizione ancora parzialmente aperta',
+}
+
+const EXIT_ISSUE_LABELS = {
+  missing: 'nessun ordine di uscita',
+  partial_fill: 'uscita parziale',
 }
 
 export default {
@@ -616,15 +624,24 @@ export default {
           const bt = d.bt || {}
           const live = d.live && !Array.isArray(d.live) ? d.live : {}
           const btPctRaw = d.bt_pnl_pct != null ? d.bt_pnl_pct : (bt.bt_pnl_pct != null ? bt.bt_pnl_pct : null)
+          // A fresh reconcile record always carries the exit_issue key
+          // (null when the exit filled fine). Its absence = an old record
+          // written before exit reconciliation -> show "n/d", not an alarm.
+          const exitReconciled = Object.prototype.hasOwnProperty.call(d, 'exit_issue')
+          const exitIssue = d.exit_issue || null
           const card = {
             symbol: d.symbol || '—',
             category: cat,
             categoryLabel: this.diffCategoryLabel(cat),
-            cls: cat === 'matched' ? (d.sizing_divergence ? 'card-soft' : 'card-ok') : 'card-hard',
+            cls: cat !== 'matched'
+              ? 'card-hard'
+              : (exitIssue ? 'card-hard' : (d.sizing_divergence ? 'card-soft' : 'card-ok')),
             btEntry: bt.bt_entry_price != null ? qp(bt.bt_qty, bt.bt_entry_price) : '—',
             btExit: bt.bt_exit_price != null ? qp(bt.bt_exit_qty != null ? bt.bt_exit_qty : bt.bt_qty, bt.bt_exit_price) : '—',
             liveEntry: '—',
             liveExit: '—',
+            exitBad: false,
+            exitStale: false,
             btPctRaw,
             btPct: this.signedPct(btPctRaw),
             livePctRaw: d.live_pnl_pct != null ? d.live_pnl_pct : null,
@@ -633,12 +650,24 @@ export default {
           }
           if (cat === 'matched' || cat === 'partial_fill' || cat === 'extra_live_order') {
             card.liveEntry = qp(live.filled_qty != null ? live.filled_qty : live.qty, live.filled_avg_price)
-            if (d.live_exit_price != null) {
+            if (!exitReconciled && cat === 'matched') {
+              card.liveExit = 'n/d (record precedente)'
+              card.exitStale = true
+            } else if (exitIssue === 'missing') {
+              card.liveExit = 'nessun ordine di uscita'
+              card.exitBad = true
+            } else if (typeof exitIssue === 'string' && exitIssue.startsWith('not_filled:')) {
+              card.liveExit = `uscita ${exitIssue.split(':')[1] || 'non eseguita'} — non eseguita`
+              card.exitBad = true
+            } else if (exitIssue === 'partial_fill') {
+              card.liveExit = `${qp(d.live_exit_qty, d.live_exit_price)} ⚠ parziale`
+              card.exitBad = true
+            } else if (d.live_exit_price != null) {
               card.liveExit = qp(d.live_exit_qty != null ? d.live_exit_qty : live.filled_qty, d.live_exit_price)
             } else if (d.live_exit_status) {
               card.liveExit = `uscita ${d.live_exit_status}`
             } else {
-              card.liveExit = 'uscita non trovata'
+              card.liveExit = '—'
             }
           } else if (cat === 'never_submitted') {
             card.liveEntry = 'nessun ordine reale'
@@ -649,6 +678,9 @@ export default {
           }
           const bits = []
           if (cat !== 'matched') bits.push(this.diffCategoryLabel(cat))
+          if (exitIssue === 'missing') bits.push('posizione entrata ma mai chiusa')
+          else if (typeof exitIssue === 'string' && exitIssue.startsWith('not_filled:')) bits.push('ordine di uscita non eseguito')
+          else if (exitIssue === 'partial_fill') bits.push('uscita solo parziale')
           if (d.entry_edge_bps != null) bits.push(`slippage ingresso ${this.bps(d.entry_edge_bps)}`)
           if (d.sizing_ratio_live_over_bt != null) {
             bits.push(`qty reale/BT ${d.sizing_ratio_live_over_bt}×${d.sizing_divergence ? ' ⚠ fuori banda' : ''}`)
@@ -666,9 +698,19 @@ export default {
       const extra = counts.extra_live_order || 0
       const partial = counts.partial_fill || 0
       const sizing = counts.sizing_divergence || 0
+      const exitMissing = counts.exit_missing || 0
+      const exitNotFilled = counts.exit_not_filled || 0
+      const exitPartial = counts.exit_partial_fill || 0
 
       if (missing) {
         lines.push({ cls: 'text-negative', text: `${missing} ordine/i previsti dal backtest e mai inviati nel reale (ingresso mancato).` })
+      }
+      if (exitMissing || exitNotFilled || exitPartial) {
+        const parts = []
+        if (exitMissing) parts.push(`${exitMissing} senza alcun ordine di uscita`)
+        if (exitNotFilled) parts.push(`${exitNotFilled} con uscita inviata ma non eseguita`)
+        if (exitPartial) parts.push(`${exitPartial} con uscita solo parziale`)
+        lines.push({ cls: 'text-negative', text: `Posizioni entrate ma non chiuse come nel backtest: ${parts.join(', ')}. La strategia esce sempre in pieno alla sessione successiva.` })
       }
       if (notFilled) {
         const byStatus = notFilledEntries
