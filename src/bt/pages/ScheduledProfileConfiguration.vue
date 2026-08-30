@@ -144,7 +144,7 @@
           </div>
         </q-card-section>
         <q-card-section v-if="drift && !drift.error">
-          <div class="text-body1" :class="drift.status === 'warning' ? 'text-orange-9' : 'text-positive'">
+          <div class="text-body1" :class="driftHeadlineClass()">
             {{ driftHeadlineIt() }}
           </div>
           <div class="text-caption text-grey-7 q-mt-xs">
@@ -606,7 +606,14 @@ export default {
       if (this.drift.error) return `Errore: ${this.drift.error}`
       if (this.drift.status === 'warning') return 'Possibile regime sfavorevole: il backtest recente si discosta dalla baseline.'
       if (this.drift.status === 'missing_baseline') return 'Baseline senza campione sufficiente.'
+      if (this.drift.status === 'insufficient_recent_data') return this.drift.note || 'Finestra recente senza trade: confronto non calcolabile.'
       return 'Backtest recente statisticamente coerente con la baseline.'
+    },
+    driftHeadlineClass() {
+      const s = this.drift && this.drift.status
+      if (s === 'warning') return 'text-orange-9'
+      if (s === 'insufficient_recent_data') return 'text-grey-8'
+      return 'text-positive'
     },
     render(tpl) {
       const value = this.profile || '<profile>'
