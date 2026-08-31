@@ -154,9 +154,11 @@ module.exports = configure(function (ctx) {
       },
 
       manifest: {
-        name: `Dashboard`,
-        short_name: `Dashboard`,
-        description: `Dashboard app`,
+        id: '/dash/',
+        scope: '/dash/',
+        name: `Backtrader Watchtower`,
+        short_name: `Watchtower`,
+        description: `Monitoraggio strategie di trading Backtrader/Alpaca`,
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#ffffff',
@@ -173,6 +175,12 @@ module.exports = configure(function (ctx) {
             type: 'image/png'
           },
           {
+            src: 'icons/icon-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable'
+          },
+          {
             src: 'icons/icon-256x256.png',
             sizes: '256x256',
             type: 'image/png'
@@ -186,6 +194,12 @@ module.exports = configure(function (ctx) {
             src: 'icons/icon-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            src: 'icons/icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }

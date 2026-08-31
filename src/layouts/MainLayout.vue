@@ -15,6 +15,7 @@
         </q-toolbar-title>
         <q-space/>
         <div class="q-gutter-sm row items-center no-wrap">
+          <install-pwa-button />
           <q-btn round dense flat color="white" :icon="$q.fullscreen.isActive ? 'fullscreen_exit' : 'fullscreen'"
                  @click="$q.fullscreen.toggle()"
                  v-if="$q.screen.gt.sm">
@@ -225,6 +226,7 @@
 
 <script>
 import EssentialLink from 'components/EssentialLink.vue'
+import InstallPwaButton from 'src/components/InstallPwaButton.vue'
 
 import { computed, defineComponent, ref } from 'vue'
 import { useRoute } from 'vue-router'
@@ -233,7 +235,8 @@ export default defineComponent({
   name: 'MainLayout',
 
   components: {
-    EssentialLink
+    EssentialLink,
+    InstallPwaButton
   },
 
   setup () {
