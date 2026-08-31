@@ -16,6 +16,9 @@
         <q-space/>
         <div class="q-gutter-sm row items-center no-wrap">
           <install-pwa-button />
+          <q-btn round dense flat color="white" icon="logout" aria-label="Esci" @click="logout">
+            <q-tooltip>Esci</q-tooltip>
+          </q-btn>
           <q-btn round dense flat color="white" :icon="$q.fullscreen.isActive ? 'fullscreen_exit' : 'fullscreen'"
                  @click="$q.fullscreen.toggle()"
                  v-if="$q.screen.gt.sm">
@@ -227,6 +230,7 @@
 <script>
 import EssentialLink from 'components/EssentialLink.vue'
 import InstallPwaButton from 'src/components/InstallPwaButton.vue'
+import { api } from 'boot/axios'
 
 import { computed, defineComponent, ref } from 'vue'
 import { useRoute } from 'vue-router'
@@ -237,6 +241,18 @@ export default defineComponent({
   components: {
     EssentialLink,
     InstallPwaButton
+  },
+
+  methods: {
+    async logout () {
+      try {
+        await api.post('/auth/logout')
+      } catch (e) {
+        // Anche se la POST fallisce (es. rete), la sessione locale è di fatto
+        // finita dal punto di vista dell'utente: si va comunque al login.
+      }
+      this.$router.replace('/login')
+    }
   },
 
   setup () {
