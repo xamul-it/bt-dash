@@ -1,5 +1,5 @@
 <template>
-  <q-page class="flex flex-center bg-primary">
+  <div class="fullscreen flex flex-center bg-primary">
     <q-card style="width: 320px; max-width: 90vw">
       <q-card-section class="text-h6 text-center">Backtrader Watchtower</q-card-section>
       <q-form @submit="submit">
@@ -32,7 +32,7 @@
         </q-card-actions>
       </q-form>
     </q-card>
-  </q-page>
+  </div>
 </template>
 
 <script>
@@ -49,8 +49,9 @@ export default {
       this.error = ''
       try {
         await api.post('/auth/login', { password: this.password })
-        const redirect = this.$route.query.redirect || '/'
-        this.$router.replace(redirect)
+        const q = this.$route.query.redirect
+        const redirect = (Array.isArray(q) ? q[0] : q) || '/'
+        this.$router.replace(redirect).catch(() => {})
       } catch (e) {
         this.error = e.response && e.response.status === 401
           ? 'Password errata'
