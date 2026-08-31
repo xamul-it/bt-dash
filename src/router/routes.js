@@ -29,6 +29,10 @@ const routes = [
     ]
   },
   {
+    path: '/login',
+    component: () => import('src/bt/pages/LoginPage.vue')
+  },
+  {
     path: '/details/:ticker',
     component: () => import('src/bt/pages/TickerDetails.vue')
   },

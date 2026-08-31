@@ -11,7 +11,21 @@ import axios from 'axios'
 // for each client)
 const api = axios.create({ baseURL: constants.API_BASE_URL })
 
-export default boot(({ app }) => {
+export default boot(({ app, router }) => {
+  api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      const url = (error.config && error.config.url) || ''
+      if (error.response && error.response.status === 401 && !url.includes('/auth/')) {
+        const current = router.currentRoute.value
+        if (current.path !== '/login') {
+          router.replace({ path: '/login', query: { redirect: current.fullPath } })
+        }
+      }
+      return Promise.reject(error)
+    }
+  )
+
   // for use inside Vue files (Options API) through this.$axios and this.$api
 
   app.config.globalProperties.$axios = axios
