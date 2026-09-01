@@ -53,7 +53,7 @@
 
       <div class="row q-col-gutter-md q-mb-md">
         <!-- Cosa è successo oggi / di recente -->
-        <div class="col-12 col-md-6">
+        <div class="col-12">
           <q-card flat bordered class="full-height">
             <q-card-section>
               <div class="text-subtitle2 text-grey-8">Cosa è successo di recente</div>
@@ -80,50 +80,6 @@
                   {{ pendingCount }} giorni in coda (aperti o in attesa dei parametri)
                 </q-badge>
               </div>
-            </q-card-section>
-          </q-card>
-        </div>
-
-        <!-- Performance vs storia -->
-        <div class="col-12 col-md-6">
-          <q-card flat bordered class="full-height">
-            <q-card-section>
-              <div class="text-subtitle2 text-grey-8">La strategia performa come in passato?</div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section>
-              <div v-if="!prePost.pre || !prePost.post" class="text-grey-6">
-                Footprint pre/post attivazione non ancora calcolato.
-              </div>
-              <template v-else>
-                <div class="text-body1">{{ driftHeadline }}</div>
-                <table class="footprint-table q-mt-sm">
-                  <thead>
-                    <tr><th></th><th>Pre-attivazione</th><th>Da {{ formatDate(overview.current_version?.effective_from_date) }}</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>Trade</td>
-                      <td>{{ prePost.pre.sample_size }}</td>
-                      <td>{{ prePost.post.sample_size }}</td>
-                    </tr>
-                    <tr>
-                      <td>Win rate</td>
-                      <td>{{ pct(prePost.pre.metrics?.win_rate) }}</td>
-                      <td>{{ pct(prePost.post.metrics?.win_rate) }}</td>
-                    </tr>
-                    <tr>
-                      <td>Gain medio/trade</td>
-                      <td>{{ pctSigned(prePost.pre.metrics?.mean) }}</td>
-                      <td>{{ pctSigned(prePost.post.metrics?.mean) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="text-caption text-grey-7 q-mt-sm">
-                  Confidenza test: {{ pct(overview.latest_drift_check?.verdict?.confidence) }}
-                  — campione post-attivazione ancora {{ prePost.post.sample_size < 30 ? 'piccolo, da confermare nel tempo' : 'sufficiente' }}.
-                </div>
-              </template>
             </q-card-section>
           </q-card>
         </div>
@@ -189,6 +145,49 @@
           </q-card>
         </div>
       </div>
+
+      <!-- Performance vs storia -->
+      <q-card flat bordered class="q-mb-md">
+        <q-card-section>
+          <div class="text-subtitle2 text-grey-8">La strategia performa come in passato?</div>
+        </q-card-section>
+        <q-separator />
+        <q-card-section>
+          <div v-if="!selectedBaseline || !prePost.pre || !prePost.post" class="text-grey-6">
+            Crea e seleziona una baseline per confrontarla con la finestra recente.
+          </div>
+          <template v-else>
+            <q-select v-model="selectedBaselineId" :options="baselineOptions" dense outlined emit-value map-options
+              label="Baseline" class="q-mb-sm" />
+            <div class="text-body1">Confronto delle finestre recenti con la baseline selezionata.</div>
+            <div class="overflow-auto">
+              <table class="footprint-table q-mt-sm">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Baseline<div class="text-caption text-grey-7">{{ dateRange(selectedBaseline) }}</div></th>
+                    <th v-for="window in comparisonWindows" :key="window.days">
+                      Ultimi {{ window.days }} giorni
+                      <div class="text-caption text-grey-7">{{ dateRange(window.comparison?.recent) }}</div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>Trade</td><td>{{ selectedBaseline?.sample_size ?? '—' }}</td><td v-for="window in comparisonWindows" :key="`trades-${window.days}`">{{ window.comparison?.recent?.sample_size ?? '—' }}</td></tr>
+                  <tr><td>Win rate</td><td>{{ pct(selectedBaseline?.metrics?.win_rate) }}</td><td v-for="window in comparisonWindows" :key="`win-${window.days}`">{{ pct(window.comparison?.recent?.metrics?.win_rate) }}</td></tr>
+                  <tr><td>Gain medio/trade</td><td>{{ pctSigned(selectedBaseline?.metrics?.mean) }}</td><td v-for="window in comparisonWindows" :key="`trade-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.mean) }}</td></tr>
+                  <tr><td>Gain medio/giorno</td><td>{{ pctSigned(selectedBaseline?.metrics?.average_daily_return_pct) }}</td><td v-for="window in comparisonWindows" :key="`day-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.average_daily_return_pct) }}</td></tr>
+                  <tr><td>Compatibilità statistica</td><td>—</td><td v-for="window in comparisonWindows" :key="`compatibility-${window.days}`">{{ compatibilityLabel(window.comparison) }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="text-caption text-grey-7 q-mt-sm">
+              Compatibilità: test bilaterale del gain medio/trade della finestra rispetto a media e dispersione della baseline.
+              Valore alto = il campione è statisticamente coerente con la baseline.
+            </div>
+          </template>
+        </q-card-section>
+      </q-card>
 
       <!-- Storico riconciliazioni -->
       <q-card flat bordered class="q-mb-md">
@@ -373,6 +372,7 @@ export default {
       loading: false,
       loadError: '',
       expandedDays: [],
+      selectedBaselineId: null,
     }
   },
   computed: {
@@ -396,13 +396,17 @@ export default {
         post: footprints.find((f) => f.period === 'post_activation'),
       }
     },
-    driftHeadline() {
-      const check = this.overview?.latest_drift_check
-      if (!check) return 'Nessun confronto ancora calcolato.'
-      if (check.status === 'warning') {
-        return 'Possibile cambio di regime: il comportamento recente si discosta dalla storia pre-attivazione.'
-      }
-      return 'Nessun cambio di regime rilevato: il comportamento recente è statisticamente coerente con la storia pre-attivazione.'
+    baselineOptions() { return (this.overview?.baselines || []).map((b) => ({ label: `${b.label} (${this.dateRange(b)})`, value: b.id })) },
+    selectedBaseline() {
+      const rows = this.overview?.baselines || []
+      return rows.find((b) => b.id === this.selectedBaselineId) || rows[0] || null
+    },
+    comparisonWindows() {
+      const meta = this.prePost.pre?.source_meta || this.prePost.post?.source_meta || {}
+      return [3, 5, 10, 15, 20, 25].map((days) => ({
+        days,
+        comparison: meta.window_comparisons?.[String(days)] || null,
+      }))
     },
     reversedTimeline() {
       return [...(this.overview?.timeline || [])].reverse()
@@ -474,7 +478,10 @@ export default {
       this.loading = true
       this.loadError = ''
       try {
-        const { data } = await api.get('/dyn/obs/watchtower/cron/profiles')
+        const { data } = await api.get('/dyn/obs/watchtower/cron/profiles', {
+          params: { _ts: Date.now() },
+          headers: { 'Cache-Control': 'no-cache' },
+        })
         this.profiles = data || []
         if (this.profiles.length && !this.selectedProfile) {
           this.selectedProfile = this.profiles[0].profile
@@ -491,8 +498,14 @@ export default {
       this.loading = true
       this.loadError = ''
       try {
-        const { data } = await api.get(`/dyn/obs/watchtower/cron/${this.selectedProfile}/overview`)
+        const { data } = await api.get(`/dyn/obs/watchtower/cron/${this.selectedProfile}/overview`, {
+          params: { _ts: Date.now() },
+          headers: { 'Cache-Control': 'no-cache' },
+        })
         this.overview = data
+        if (!this.selectedBaselineId && data?.baselines?.length) {
+          this.selectedBaselineId = data.baselines[0].id
+        }
       } catch (err) {
         this.loadError = `Impossibile caricare il profilo ${this.selectedProfile}: ${err?.message || err}`
         this.overview = null
@@ -504,6 +517,10 @@ export default {
       if (!value) return '—'
       return String(value).slice(0, 10)
     },
+    dateRange(footprint) {
+      if (!footprint) return '—'
+      return `${this.formatDate(footprint.window_start)} → ${this.formatDate(footprint.window_end)}`
+    },
     pct(value) {
       if (value === null || value === undefined) return '—'
       return `${(Number(value) * 100).toFixed(1)}%`
@@ -512,6 +529,22 @@ export default {
       if (value === null || value === undefined) return '—'
       const v = Number(value)
       return `${v >= 0 ? '+' : ''}${v.toFixed(3)}%`
+    },
+    compatibilityLabel(comparison) {
+      const baselineMean = Number(this.selectedBaseline?.metrics?.mean)
+      const baselineStddev = Number(this.selectedBaseline?.metrics?.stddev)
+      const recentMean = Number(comparison?.recent?.metrics?.mean)
+      const sampleSize = Number(comparison?.recent?.sample_size)
+      if (![baselineMean, baselineStddev, recentMean, sampleSize].every(Number.isFinite) || baselineStddev <= 0 || sampleSize <= 0) return '—'
+      const z = Math.abs(recentMean - baselineMean) / (baselineStddev / Math.sqrt(sampleSize))
+      return this.pct(this.normalTwoSidedProbability(z))
+    },
+    normalTwoSidedProbability(z) {
+      // Abramowitz-Stegun approximation of erfc(z / sqrt(2)).
+      const t = 1 / (1 + 0.2316419 * z)
+      const density = 0.3989422804014327 * Math.exp(-0.5 * z * z)
+      const upperTail = density * ((((1.330274429 * t - 1.821255978) * t + 1.781477937) * t - 0.356563782) * t + 0.319381530) * t
+      return Math.max(0, Math.min(1, 2 * upperTail))
     },
     rowBadgeColor(result) {
       if (result.status === 'error') return 'grey-8'
