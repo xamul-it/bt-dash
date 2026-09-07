@@ -140,6 +140,19 @@
                 <q-expansion-item dense label="Vedi parametri (STRATARGS)" class="q-mt-sm">
                   <pre class="stratargs-pre">{{ JSON.stringify(overview.current_version.stratargs, null, 2) }}</pre>
                 </q-expansion-item>
+                <q-expansion-item dense label="Vedi parametri Backtrader (replay)" class="q-mt-sm">
+                  <div class="text-caption text-grey-7 q-mb-xs">
+                    Stessa configurazione della strategia, con <code>auction: true</code> nel backtest: è la traduzione
+                    prevista per simulare correttamente close → open, non una modifica ai parametri Alpaca.
+                  </div>
+                  <pre class="stratargs-pre">{{ JSON.stringify(backtestStratargs(overview.current_version), null, 2) }}</pre>
+                </q-expansion-item>
+                <div class="text-caption text-grey-7 q-mt-sm">Annota una data anche senza cambio di versione (utile per development).</div>
+                <div class="row q-col-gutter-xs q-mt-xs items-center">
+                  <div class="col-12 col-sm-4"><q-input v-model="markerDate" type="date" dense outlined label="Data" /></div>
+                  <div class="col"><q-input v-model="markerLabel" dense outlined label="Etichetta" @keyup.enter="createChangeMarker" /></div>
+                  <div class="col-auto"><q-btn color="primary" dense label="Etichetta" :loading="markerSaving" @click="createChangeMarker" /></div>
+                </div>
               </template>
             </q-card-section>
           </q-card>
@@ -189,6 +202,48 @@
         </q-card-section>
       </q-card>
 
+      <!-- Alpaca vs baseline Backtrader -->
+      <q-card flat bordered class="q-mb-md">
+        <q-card-section>
+          <div class="text-subtitle2 text-grey-8">Su Alpaca performa come Backtrader in passato?</div>
+        </q-card-section>
+        <q-separator />
+        <q-card-section>
+          <div v-if="!selectedBaseline" class="text-grey-6">
+            Crea e seleziona una baseline Backtrader per confrontarla con i risultati Alpaca recenti.
+          </div>
+          <template v-else>
+            <div class="text-body1">
+              Baseline Backtrader selezionata confrontata con gli eseguiti Alpaca delle ultime finestre di trading.
+            </div>
+            <div class="overflow-auto">
+              <table class="footprint-table q-mt-sm">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Baseline Backtrader<div class="text-caption text-grey-7">{{ dateRange(selectedBaseline) }}</div></th>
+                    <th v-for="window in alpacaComparisonWindows" :key="`alpaca-${window.days}`">
+                      Alpaca — ultimi {{ window.days }} giorni
+                      <div class="text-caption text-grey-7">{{ dateRange(window.comparison?.recent) }}</div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>Trade</td><td>{{ selectedBaseline?.sample_size ?? '—' }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-trades-${window.days}`">{{ window.comparison?.recent?.sample_size ?? '—' }}</td></tr>
+                  <tr><td>Win rate</td><td>{{ pct(selectedBaseline?.metrics?.win_rate) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-win-${window.days}`">{{ pct(window.comparison?.recent?.metrics?.win_rate) }}</td></tr>
+                  <tr><td>Gain medio/trade</td><td>{{ pctSigned(selectedBaseline?.metrics?.mean) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-trade-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.mean) }}</td></tr>
+                  <tr><td>Gain medio/giorno</td><td>{{ pctSigned(selectedBaseline?.metrics?.average_daily_return_pct) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-day-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.average_daily_return_pct) }}</td></tr>
+                  <tr><td>Compatibilità statistica</td><td>—</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-compatibility-${window.days}`">{{ compatibilityLabel(window.comparison) }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="text-caption text-grey-7 q-mt-sm">
+              I trade e i rendimenti giornalieri provengono solo dagli ordini Alpaca con uscita eseguita; la baseline resta sempre Backtrader.
+            </div>
+          </template>
+        </q-card-section>
+      </q-card>
+
       <!-- Storico riconciliazioni -->
       <q-card flat bordered class="q-mb-md">
         <q-card-section>
@@ -215,7 +270,19 @@
                   :name="expandedDays.includes(props.row.key) ? 'expand_more' : 'chevron_right'"
                 />
               </q-td>
-              <q-td key="trading_date" :props="props">{{ props.row.trading_date }}</q-td>
+              <q-td key="trading_date" :props="props">
+                <strong v-if="props.row.change">{{ props.row.trading_date }}</strong>
+                <span v-else>{{ props.row.trading_date }}</span>
+                <q-icon
+                  v-if="props.row.change"
+                  :name="changeIcon(props.row.change.kind)"
+                  color="primary"
+                  size="16px"
+                  class="q-ml-xs"
+                >
+                  <q-tooltip>{{ props.row.change.label }}</q-tooltip>
+                </q-icon>
+              </q-td>
               <q-td key="status" :props="props">
                 <q-badge :color="props.row.badgeColor">{{ props.row.statusLabel }}</q-badge>
               </q-td>
@@ -256,6 +323,14 @@
                     ⚠ {{ commitCaveat(props.row.raw) }}
                   </div>
 
+                  <q-expansion-item dense label="Parametri Backtrader usati in questo replay" class="q-mb-xs">
+                    <div class="text-caption text-grey-7 q-mb-xs">
+                      Versione parametri #{{ props.row.raw.params_version_id || '—' }}; <code>auction: true</code> è la
+                      traduzione di esecuzione documentata per il backtest.
+                    </div>
+                    <pre class="stratargs-pre">{{ JSON.stringify(backtestStratargs(replayParamsVersion(props.row.raw)), null, 2) }}</pre>
+                  </q-expansion-item>
+
                   <div v-if="props.row.raw.status === 'error'" class="text-negative">
                     Replay del backtest fallito: {{ props.row.raw.error || 'errore sconosciuto' }}
                   </div>
@@ -293,8 +368,8 @@
                           <span :class="pctClass(card.btPctRaw)">{{ card.btPct || '—' }}</span>
 
                           <span class="sym-grid__row">Alpaca</span>
-                          <span>{{ card.liveEntry }}</span>
-                          <span :class="{ 'text-negative text-weight-medium': card.exitBad, 'text-grey-5': card.exitStale }">{{ card.liveExit }}</span>
+                          <span>{{ executionText(card.liveEntry, card.liveEntryCodes) }}</span>
+                          <span :class="{ 'text-negative text-weight-medium': card.exitBad, 'text-grey-5': card.exitStale }">{{ executionText(card.liveExit, card.liveExitCodes) }}</span>
                           <span :class="pctClass(card.livePctRaw)">{{ card.livePct || '—' }}</span>
                         </div>
                         <div v-if="card.footer" class="sym-card__foot">{{ card.footer }}</div>
@@ -305,6 +380,7 @@
                       "Guad." = rendimento del round-trip (uscita vs ingresso). Prezzo di uscita backtest ricavato da pnl/size.
                       "Due strategie diverse" / contaminazione account → riquadro "Account e proprietà" sopra (guardrail).
                     </div>
+                    <div class="text-caption text-grey-6">Legenda Alpaca: <b>c</b> asta di chiusura (CLS), <b>o</b> asta di apertura (OPG), <b>m</b> mercato, <b>f</b> fallback dopo asta non eseguita.</div>
                     <div v-if="props.row.raw.replay_outpath" class="text-caption text-grey-6">
                       Output replay: <code>{{ props.row.raw.replay_outpath }}</code>
                     </div>
@@ -322,6 +398,15 @@
           <div class="text-subtitle2 text-grey-8">Cosa è cambiato nel tempo</div>
         </q-card-section>
         <q-separator />
+        <q-card-section v-if="changeMarkers.length" class="q-py-sm">
+          <div class="text-caption text-grey-7 q-mb-xs">Marcatori: <b>automatico</b> = cambio rilevato di parametri/codice; <b>manuale</b> = nota operativa.</div>
+          <div class="row q-gutter-xs">
+            <q-badge v-for="marker in changeMarkers" :key="marker.id" outline :color="marker.source === 'manuale' ? 'deep-purple' : 'primary'" class="q-pa-xs">
+              {{ formatDate(marker.trading_date) }} · {{ marker.label }}
+              <span v-if="marker.source === 'automatico' && (marker.code_git_ref || marker.core_commit)" class="q-ml-xs">{{ marker.code_git_ref || marker.core_commit.slice(0, 8) }}</span>
+            </q-badge>
+          </div>
+        </q-card-section>
         <q-list separator>
           <q-item v-for="v in reversedTimeline" :key="v.id">
             <q-item-section>
@@ -373,6 +458,9 @@ export default {
       loadError: '',
       expandedDays: [],
       selectedBaselineId: null,
+      markerDate: new Date().toISOString().slice(0, 10),
+      markerLabel: '',
+      markerSaving: false,
     }
   },
   computed: {
@@ -408,8 +496,64 @@ export default {
         comparison: meta.window_comparisons?.[String(days)] || null,
       }))
     },
+    alpacaComparisonWindows() {
+      const completedDays = [...(this.overview?.reconciliation_results || [])]
+        .filter((result) => result.status === 'ok' && Number.isFinite(Number(result.summary?.live_day_return_pct)))
+        .sort((a, b) => String(b.trading_date).localeCompare(String(a.trading_date)))
+
+      return [3, 5, 10, 15, 20, 25].map((days) => {
+        const rows = completedDays.slice(0, days)
+        const tradeReturns = rows.flatMap((result) => (result.diffs || [])
+          .filter((diff) => ['matched', 'extra_live_order'].includes(diff.category) && diff.exit_issue == null)
+          .map((diff) => Number(diff.live_pnl_pct))
+          .filter(Number.isFinite))
+        const dailyReturns = rows.map((result) => Number(result.summary?.live_day_return_pct)).filter(Number.isFinite)
+        const mean = tradeReturns.length ? tradeReturns.reduce((sum, value) => sum + value, 0) / tradeReturns.length : null
+        const winRate = tradeReturns.length ? tradeReturns.filter((value) => value > 0).length / tradeReturns.length : null
+        const averageDailyReturn = dailyReturns.length ? dailyReturns.reduce((sum, value) => sum + value, 0) / dailyReturns.length : null
+        const oldest = rows[rows.length - 1]
+        const newest = rows[0]
+        return {
+          days,
+          comparison: {
+            recent: {
+              sample_size: tradeReturns.length,
+              window_start: oldest?.trading_date || null,
+              window_end: newest?.trading_date || null,
+              metrics: {
+                mean,
+                win_rate: winRate,
+                average_daily_return_pct: averageDailyReturn,
+                daily_sample_size: dailyReturns.length,
+              },
+            },
+          },
+        }
+      })
+    },
+    replayParamsVersion() {
+      return (result) => {
+        const id = result?.params_version_id
+        const versions = this.overview?.timeline || []
+        return versions.find((version) => version.id === id) || this.overview?.current_version || null
+      }
+    },
     reversedTimeline() {
       return [...(this.overview?.timeline || [])].reverse()
+    },
+    changeMarkers() {
+      return [...(this.overview?.change_markers || [])].sort((a, b) => String(b.trading_date).localeCompare(String(a.trading_date)))
+    },
+    automaticChangesByDate() {
+      const changes = {}
+      for (const marker of this.overview?.change_markers || []) {
+        if (marker.source !== 'automatico' || !['params', 'code', 'both'].includes(marker.change_kind)) continue
+        changes[String(marker.trading_date).slice(0, 10)] = {
+          kind: marker.change_kind,
+          label: marker.label,
+        }
+      }
+      return changes
     },
     reconciliationColumns() {
       return [
@@ -427,6 +571,7 @@ export default {
         statusLabel: this.rowStatusLabel(r),
         badgeColor: this.rowBadgeColor(r),
         detail: this.resultHeadline(r),
+        change: r.change || this.automaticChangesByDate[String(r.trading_date).slice(0, 10)] || null,
         raw: r,
       }))
       const pendingRows = (this.overview?.pending_queue || []).slice(0, 15).map((p) => ({
@@ -513,9 +658,31 @@ export default {
         this.loading = false
       }
     },
+    async createChangeMarker() {
+      if (!this.markerDate || !this.markerLabel.trim() || !this.selectedProfile) return
+      this.markerSaving = true
+      this.loadError = ''
+      try {
+        await api.post(`/dyn/obs/watchtower/cron/${this.selectedProfile}/change-markers`, {
+          trading_date: this.markerDate,
+          label: this.markerLabel.trim(),
+        })
+        this.markerLabel = ''
+        await this.loadOverview()
+      } catch (err) {
+        this.loadError = `Impossibile salvare l'etichetta: ${err?.response?.data?.error || err?.message || err}`
+      } finally {
+        this.markerSaving = false
+      }
+    },
     formatDate(value) {
       if (!value) return '—'
       return String(value).slice(0, 10)
+    },
+    changeIcon(kind) {
+      if (kind === 'params') return 'tune'
+      if (kind === 'code') return 'code'
+      return 'published_with_changes'
     },
     dateRange(footprint) {
       if (!footprint) return '—'
@@ -524,6 +691,10 @@ export default {
     pct(value) {
       if (value === null || value === undefined) return '—'
       return `${(Number(value) * 100).toFixed(1)}%`
+    },
+    backtestStratargs(version) {
+      if (!version?.stratargs) return {}
+      return { ...version.stratargs, auction: true }
     },
     pctSigned(value) {
       if (value === null || value === undefined) return '—'
@@ -637,6 +808,10 @@ export default {
       const n = Number(value)
       return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
     },
+    executionText(value, codes) {
+      if (!value || value === '—' || !Array.isArray(codes) || !codes.length) return value || '—'
+      return `${value} [${codes.join('/')}]`
+    },
     fmtDayRet(value) {
       if (value === null || value === undefined) return '—'
       return this.signedPct(value)
@@ -673,6 +848,8 @@ export default {
             btExit: bt.bt_exit_price != null ? qp(bt.bt_exit_qty != null ? bt.bt_exit_qty : bt.bt_qty, bt.bt_exit_price) : '—',
             liveEntry: '—',
             liveExit: '—',
+            liveEntryCodes: d.live_entry_execution_codes || live.execution_codes || [],
+            liveExitCodes: d.live_exit_execution_codes || [],
             exitBad: false,
             exitStale: false,
             btPctRaw,
