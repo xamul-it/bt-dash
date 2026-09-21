@@ -567,6 +567,7 @@ export default {
     reconciliationRows() {
       const rows = (this.overview?.reconciliation_results || []).map((r) => ({
         key: `res-${r.trading_date}`,
+        sortDate: String(r.trading_date).slice(0, 10),
         trading_date: this.formatDate(r.trading_date),
         statusLabel: this.rowStatusLabel(r),
         badgeColor: this.rowBadgeColor(r),
@@ -576,6 +577,7 @@ export default {
       }))
       const pendingRows = (this.overview?.pending_queue || []).slice(0, 15).map((p) => ({
         key: `pend-${p.trading_date}`,
+        sortDate: String(p.trading_date).slice(0, 10),
         trading_date: this.formatDate(p.trading_date),
         statusLabel: p.status === 'blocked_missing_params' ? 'parametri sconosciuti' : 'in coda',
         badgeColor: p.status === 'blocked_missing_params' ? 'grey-7' : 'orange',
@@ -583,14 +585,16 @@ export default {
         raw: null,
       }))
       return [...pendingRows, ...rows]
+        .sort((a, b) => b.sortDate.localeCompare(a.sortDate))
     },
     statusHeadline() {
       if (!this.overview) return ''
       if ((this.overview.open_guardrail_alerts || []).length) {
         return 'Attenzione: possibile contaminazione tra strategie sullo stesso account'
       }
-      const hardIssue = (this.latestResult?.summary?.counts &&
-        Object.keys(this.latestResult.summary.counts).some((k) => k !== 'matched' && k !== 'sizing_divergence'))
+      const recentResults = (this.overview.reconciliation_results || []).slice(0, 5)
+      const hardIssue = recentResults.some((result) => result?.summary?.counts &&
+        Object.keys(result.summary.counts).some((k) => k !== 'matched' && k !== 'sizing_divergence'))
       if (hardIssue) return 'Divergenza rilevata nell\'ultima riconciliazione'
       if (this.overview.latest_drift_check?.status === 'warning') return 'Possibile cambio di regime nella strategia'
       return 'Tutto nella norma'
@@ -732,6 +736,12 @@ export default {
     resultHeadline(result) {
       if (!result) return ''
       if (result.status === 'error') return 'Il replay del backtest è fallito per questo giorno.'
+      if (result.summary?.live_no_trade) {
+        const reasons = result.summary.live_no_trade_reasons || []
+        return reasons.length
+          ? `Nessun trade. Motivo registrato: ${reasons.join(' | ')}`
+          : 'Nessun trade; il job di ingresso è terminato regolarmente.'
+      }
       const counts = result.summary?.counts || {}
       const total = Object.values(counts).reduce((a, b) => a + b, 0)
       const matched = counts.matched || 0
