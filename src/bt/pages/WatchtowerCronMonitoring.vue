@@ -736,11 +736,16 @@ export default {
     resultHeadline(result) {
       if (!result) return ''
       if (result.status === 'error') return 'Il replay del backtest è fallito per questo giorno.'
-      if (result.summary?.live_no_trade) {
-        const reasons = result.summary.live_no_trade_reasons || []
-        return reasons.length
-          ? `Nessun trade. Motivo registrato: ${reasons.join(' | ')}`
-          : 'Nessun trade; il job di ingresso è terminato regolarmente.'
+      if (result.summary?.bt_no_trade || result.summary?.live_no_trade) {
+        const side = (name, noTrade, reasons, count) => {
+          if (!noTrade) return `${name}: ${count || 0} ordine/i`
+          const labels = (reasons || []).map((r) => r?.label || r?.detail || String(r))
+          return `${name}: nessun ordine — ${labels.join(' | ') || 'causale non disponibile'}`
+        }
+        return [
+          side('Backtest', result.summary?.bt_no_trade, result.summary?.bt_no_trade_reasons, result.summary?.bt_entry_count),
+          side('Alpaca', result.summary?.live_no_trade, result.summary?.live_no_trade_reasons, result.summary?.live_entry_count),
+        ].join(' · ')
       }
       const counts = result.summary?.counts || {}
       const total = Object.values(counts).reduce((a, b) => a + b, 0)
@@ -921,6 +926,17 @@ export default {
       const exitMissing = counts.exit_missing || 0
       const exitNotFilled = counts.exit_not_filled || 0
       const exitPartial = counts.exit_partial_fill || 0
+
+      const addNoTradeReason = (name, enabled, reasons) => {
+        if (!enabled) return
+        const text = (reasons || []).map((r) => {
+          const label = r?.label || 'Causale non disponibile'
+          return r?.detail ? `${label} (${r.detail})` : label
+        }).join(' | ')
+        lines.push({ cls: 'text-orange-9', text: `${name}: nessun ordine — ${text || 'causale non disponibile'}.` })
+      }
+      addNoTradeReason('Backtest', result?.summary?.bt_no_trade, result?.summary?.bt_no_trade_reasons)
+      addNoTradeReason('Alpaca', result?.summary?.live_no_trade, result?.summary?.live_no_trade_reasons)
 
       if (missing) {
         lines.push({ cls: 'text-negative', text: `${missing} ordine/i previsti dal backtest e mai inviati nel reale (ingresso mancato).` })
