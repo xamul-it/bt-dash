@@ -565,17 +565,47 @@ export default {
       ]
     },
     reconciliationRows() {
-      const rows = (this.overview?.reconciliation_results || []).map((r) => ({
-        key: `res-${r.trading_date}`,
-        sortDate: String(r.trading_date).slice(0, 10),
-        trading_date: this.formatDate(r.trading_date),
-        statusLabel: this.rowStatusLabel(r),
-        badgeColor: this.rowBadgeColor(r),
-        detail: this.resultHeadline(r),
-        change: r.change || this.automaticChangesByDate[String(r.trading_date).slice(0, 10)] || null,
-        raw: r,
+      const results = this.overview?.reconciliation_results || []
+      const decisions = this.overview?.entry_decisions || []
+      const settlements = this.overview?.entry_settlements || []
+      const comparisons = this.overview?.entry_comparisons || []
+      const byDate = new Map()
+      results.forEach((r) => {
+        const day = String(r.trading_date).slice(0, 10)
+        byDate.set(day, { result: r, decisions: {}, settlements: {} })
+      })
+      decisions.forEach((d) => {
+        const day = String(d.trading_date).slice(0, 10)
+        if (!byDate.has(day)) byDate.set(day, { result: null, decisions: {}, settlements: {} })
+        byDate.get(day).decisions[d.source] = d
+      })
+      settlements.forEach((s) => {
+        const day = String(s.trading_date).slice(0, 10)
+        if (!byDate.has(day)) byDate.set(day, { result: null, decisions: {}, settlements: {} })
+        const bySource = byDate.get(day).settlements
+        if (!bySource[s.source]) bySource[s.source] = []
+        bySource[s.source].push(s)
+      })
+      comparisons.forEach((comparison) => {
+        const day = String(comparison.trading_date).slice(0, 10)
+        if (!byDate.has(day)) byDate.set(day, { result: null, decisions: {}, settlements: {} })
+        byDate.get(day).comparison = comparison
+      })
+      const rows = [...byDate.entries()].map(([day, item]) => ({
+        key: `day-${day}`,
+        sortDate: day,
+        trading_date: this.formatDate(day),
+        statusLabel: item.comparison ? this.entryComparisonLabel(item.comparison) : (item.result ? this.rowStatusLabel(item.result) : this.entryStatusLabel(item.decisions)),
+        badgeColor: item.comparison ? this.entryComparisonColor(item.comparison) : (item.result ? this.rowBadgeColor(item.result) : this.entryStatusColor(item.decisions)),
+        detail: this.entryHeadline(item.decisions, item.settlements) || this.resultHeadline(item.result),
+        change: item.result?.change || this.automaticChangesByDate[day] || null,
+        raw: item.result,
+        decisions: item.decisions,
+        settlements: item.settlements,
       }))
-      const pendingRows = (this.overview?.pending_queue || []).slice(0, 15).map((p) => ({
+      const pendingRows = (this.overview?.pending_queue || [])
+        .filter((p) => !byDate.has(String(p.trading_date).slice(0, 10)))
+        .slice(0, 15).map((p) => ({
         key: `pend-${p.trading_date}`,
         sortDate: String(p.trading_date).slice(0, 10),
         trading_date: this.formatDate(p.trading_date),
@@ -591,6 +621,10 @@ export default {
       if (!this.overview) return ''
       if ((this.overview.open_guardrail_alerts || []).length) {
         return 'Attenzione: possibile contaminazione tra strategie sullo stesso account'
+      }
+      const recentEntryComparisons = (this.overview.entry_comparisons || []).slice(0, 5)
+      if (recentEntryComparisons.some((item) => ['diverged', 'error'].includes(item.status))) {
+        return 'Divergenza rilevata nella riconciliazione degli ingressi'
       }
       const recentResults = (this.overview.reconciliation_results || []).slice(0, 5)
       const hardIssue = recentResults.some((result) => result?.summary?.counts &&
@@ -623,6 +657,47 @@ export default {
     await this.loadProfiles()
   },
   methods: {
+    settlementLabel(settlements) {
+      if (!settlements?.length) return 'chiusura pending'
+      const pending = settlements.filter((s) => s.status === 'pending').length
+      const closed = settlements.filter((s) => s.status === 'closed')
+      const parts = []
+      if (pending) parts.push(`${pending} chiusura/e pending`)
+      if (closed.length) {
+        const pnl = closed.reduce((sum, s) => sum + Number(s.pnl || 0), 0)
+        parts.push(`${closed.length} chiusa/e · gain ${pnl > 0 ? '+' : ''}${pnl.toFixed(2)}`)
+      }
+      return parts.join(' · ') || 'chiusura non comunicata'
+    },
+    entryDecisionLabel(decision, settlements) {
+      if (!decision) return 'run non eseguito'
+      if (decision.run_status === 'running') return 'in esecuzione'
+      if (decision.run_status === 'failed') return `errore run: ${decision.error || 'errore sconosciuto'}`
+      if (!decision.outcome) return 'strategia eseguita · causale non comunicata'
+      const reasons = (decision.reasons || []).map((r) => r?.code || r?.detail).filter(Boolean)
+      if (decision.outcome === 'no_orders') return `nessun ordine · ${reasons.join(' | ') || 'causale non comunicata'}`
+      return `${(decision.orders || []).length} ordini · ${this.settlementLabel(settlements)}`
+    },
+    entryHeadline(decisions, settlements = {}) {
+      if (!decisions || (!decisions.backtest && !decisions.alpaca)) return ''
+      return `Backtest: ${this.entryDecisionLabel(decisions.backtest, settlements.backtest)} · Alpaca: ${this.entryDecisionLabel(decisions.alpaca, settlements.alpaca)}`
+    },
+    entryStatusLabel(decisions) {
+      if (Object.values(decisions || {}).some((d) => d?.run_status === 'failed')) return 'errore run'
+      if (Object.values(decisions || {}).some((d) => d?.run_status === 'running')) return 'in esecuzione'
+      return 'decisioni ingresso'
+    },
+    entryStatusColor(decisions) {
+      if (Object.values(decisions || {}).some((d) => d?.run_status === 'failed')) return 'negative'
+      if (Object.values(decisions || {}).some((d) => d?.run_status === 'running')) return 'orange'
+      return 'primary'
+    },
+    entryComparisonLabel(comparison) {
+      return ({ matched: 'ingressi allineati', diverged: 'divergenza ingressi', incomplete: 'riconciliazione incompleta', error: 'errore riconciliazione' })[comparison?.status] || 'riconciliazione ingressi'
+    },
+    entryComparisonColor(comparison) {
+      return ({ matched: 'positive', diverged: 'negative', incomplete: 'orange', error: 'negative' })[comparison?.status] || 'primary'
+    },
     async loadProfiles() {
       this.loading = true
       this.loadError = ''

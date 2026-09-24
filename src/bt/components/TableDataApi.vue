@@ -115,6 +115,12 @@ export default defineComponent({
         for (let i in props.jsonDataPath) {
           rd = rd[props.jsonDataPath[i]]
         }
+        // today.json v2 carries operational metadata alongside the legacy
+        // indicator payload.  Keep this generic table focused on that
+        // legacy payload; the scheduled dashboard renders the entry receipt.
+        if (rd?.schema_version === 2 && rd?.data && typeof rd.data === 'object') {
+          rd = rd.data
+        }
         rows.value = prepareTableData(rd)
       })
         .catch((e) => {
