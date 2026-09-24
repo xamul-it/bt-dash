@@ -58,13 +58,53 @@
         <q-separator />
         <q-table :rows="baselines" :columns="columns" row-key="id" dense flat
                  :pagination="{ rowsPerPage: 10 }" :loading="loading">
+          <template #body-cell-status="props">
+            <q-td :props="props">
+              <q-badge :color="compatibilityColor(props.row.compatibility)" :label="compatibilityLabel(props.row.compatibility)" />
+            </q-td>
+          </template>
           <template #body-cell-actions="props">
             <q-td :props="props">
+              <q-btn flat dense round icon="info" color="primary" @click="showDetail(props.row)">
+                <q-tooltip>Dettaglio ricevuta baseline</q-tooltip>
+              </q-btn>
               <q-btn flat dense round icon="delete" color="negative" @click="removeBaseline(props.row)" />
             </q-td>
           </template>
         </q-table>
       </q-card>
+
+      <q-dialog v-model="detailDialog" maximized>
+        <q-card v-if="selectedBaselineDetail">
+          <q-bar>
+            <div>Ricevuta baseline — {{ selectedBaselineDetail.label }}</div>
+            <q-space />
+            <q-btn dense flat icon="close" v-close-popup />
+          </q-bar>
+          <q-card-section class="q-gutter-md">
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-md-6"><b>Commit applicazione:</b> <code>{{ selectedBaselineDetail.code_commit || 'legacy/non disponibile' }}</code></div>
+              <div class="col-12 col-md-6"><b>Commit bt-core:</b> <code>{{ selectedBaselineDetail.core_commit || 'legacy/non disponibile' }}</code></div>
+              <div class="col-12"><b>Hash configurazione:</b> <code>{{ selectedBaselineDetail.configuration_hash || 'legacy/non disponibile' }}</code></div>
+              <div class="col-12"><b>Run ID:</b> <code>{{ selectedBaselineDetail.run_id || 'non disponibile' }}</code></div>
+              <div class="col-12" v-if="selectedBaselineDetail.result_snapshot?.param_outpath"><b>Output run:</b> <code>{{ selectedBaselineDetail.result_snapshot.param_outpath }}</code></div>
+            </div>
+            <q-separator />
+            <div><b>Stato:</b> {{ compatibilityLabel(selectedBaselineDetail.compatibility) }}</div>
+            <div v-if="selectedBaselineDetail.compatibility?.differences?.length" class="text-orange-10">
+              Differenze: {{ selectedBaselineDetail.compatibility.differences.join(', ') }}
+            </div>
+            <div class="text-subtitle2">Parametri effettivi</div>
+            <pre class="baseline-json">{{ formatJson(selectedBaselineDetail.effective_params) }}</pre>
+            <div class="text-subtitle2">Configurazione del run</div>
+            <pre class="baseline-json">{{ formatJson(selectedBaselineDetail.run_config) }}</pre>
+            <div class="text-subtitle2">Universo effettivo</div>
+            <pre class="baseline-json">{{ formatJson(selectedBaselineDetail.result_snapshot?.tickers || []) }}</pre>
+            <div class="text-subtitle2">Artefatti e hash</div>
+            <pre class="baseline-json">{{ formatJson(selectedBaselineDetail.artifact_manifest || []) }}</pre>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
     </template>
 
     <div v-else class="text-grey-6 q-pa-lg text-center">Digita un profilo per gestirne le baseline.</div>
@@ -83,6 +123,7 @@ export default {
       baselines: [], loading: false, loadError: '',
       form: { label: '', window_start: '2000-01-01', window_end: `${new Date().getFullYear()}-01-01` },
       jobId: null, jobState: null, jobTimer: null,
+      detailDialog: false, selectedBaselineDetail: null,
     }
   },
   computed: {
@@ -91,6 +132,8 @@ export default {
       return [
         { name: 'label', label: 'Nome', field: 'label', align: 'left' },
         { name: 'window', label: 'Finestra', field: (r) => `${r.window_start} → ${r.window_end}`, align: 'left' },
+        { name: 'status', label: 'Stato', field: (r) => r.compatibility?.status || 'unknown', align: 'left' },
+        { name: 'commits', label: 'Codice', field: (r) => this.shortHash(r.core_commit || r.code_commit), align: 'left' },
         { name: 'sample_size', label: 'Trade', field: 'sample_size', align: 'right' },
         { name: 'created_at', label: 'Calcolata', field: (r) => String(r.created_at || '').slice(0, 16).replace('T', ' '), align: 'left' },
         { name: 'actions', label: '', field: 'actions', align: 'right' },
@@ -127,6 +170,19 @@ export default {
         const n = (val || '').toLowerCase()
         this.filteredOptions = n ? this.knownProfiles.filter((p) => p.toLowerCase().includes(n)) : this.knownProfiles.slice()
       })
+    },
+    shortHash(value) { return value ? String(value).slice(0, 12) : 'legacy' },
+    compatibilityLabel(compatibility) {
+      const status = compatibility?.status || 'unknown'
+      return { compatible: 'Allineata', different: 'Diversa', unknown: 'Legacy' }[status] || status
+    },
+    compatibilityColor(compatibility) {
+      return { compatible: 'positive', different: 'orange-9', unknown: 'grey-6' }[compatibility?.status || 'unknown']
+    },
+    formatJson(value) { return JSON.stringify(value || {}, null, 2) },
+    showDetail(row) {
+      this.selectedBaselineDetail = row
+      this.detailDialog = true
     },
     async loadBaselines() {
       if (!this.profile) return
@@ -177,3 +233,16 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+.baseline-json {
+  max-height: 280px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+</style>
