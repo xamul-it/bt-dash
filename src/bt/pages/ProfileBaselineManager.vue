@@ -40,17 +40,13 @@
           <div class="col-6 col-md-2">
             <q-input v-model="form.window_end" label="Data fine" mask="####-##-##" outlined dense hint="YYYY-MM-DD" />
           </div>
-          <div class="col-6 col-md-2">
-            <q-input v-model="form.as_of_date" label="Versione (as-of)" mask="####-##-##" outlined dense
-                     hint="opz. — STRATARGS a questa data" />
-          </div>
           <div class="col-auto">
             <q-btn color="primary" label="Calcola" icon="play_arrow" :loading="jobRunning"
                    :disable="!canSubmit" @click="startJob" />
           </div>
           <div class="col-12">
             <div class="text-caption text-grey-6">
-              Il backtest gira sul codice corrente del checkout (solo i parametri sono storicizzati alla data as-of).
+              La baseline acquisisce codice e configurazione correnti. Il checkout deve essere pulito e identificabile.
             </div>
             <div v-if="jobState" class="text-body2 q-mt-xs" :class="jobStateClass">{{ jobStateText }}</div>
           </div>
@@ -85,7 +81,7 @@ export default {
     return {
       knownProfiles: [], filteredOptions: [], selectedProfile: null, profileText: '',
       baselines: [], loading: false, loadError: '',
-      form: { label: '', window_start: '2000-01-01', window_end: `${new Date().getFullYear()}-01-01`, as_of_date: '' },
+      form: { label: '', window_start: '2000-01-01', window_end: `${new Date().getFullYear()}-01-01` },
       jobId: null, jobState: null, jobTimer: null,
     }
   },
@@ -95,7 +91,6 @@ export default {
       return [
         { name: 'label', label: 'Nome', field: 'label', align: 'left' },
         { name: 'window', label: 'Finestra', field: (r) => `${r.window_start} → ${r.window_end}`, align: 'left' },
-        { name: 'as_of_date', label: 'Versione as-of', field: 'as_of_date', align: 'left' },
         { name: 'sample_size', label: 'Trade', field: 'sample_size', align: 'right' },
         { name: 'created_at', label: 'Calcolata', field: (r) => String(r.created_at || '').slice(0, 16).replace('T', ' '), align: 'left' },
         { name: 'actions', label: '', field: 'actions', align: 'right' },
@@ -149,7 +144,6 @@ export default {
           label: this.form.label.trim(),
           window_start: this.form.window_start,
           window_end: this.form.window_end,
-          as_of_date: this.form.as_of_date || undefined,
         })
         this.jobId = data.job_id
         this.jobState = data
