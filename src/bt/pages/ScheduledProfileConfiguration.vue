@@ -143,6 +143,13 @@
                    to="/ScheduledProfiles/Baselines" />
           </div>
         </q-card-section>
+        <q-banner v-if="selectedBaselineCompatibility && selectedBaselineCompatibility.status !== 'compatible'"
+                  class="bg-orange-1 text-orange-10 q-mx-md q-mb-md" rounded dense>
+          {{ baselineCompatibilityMessage(selectedBaselineCompatibility) }}
+        </q-banner>
+        <q-card-section v-else-if="selectedBaselineCompatibility" class="text-caption text-positive q-pt-none">
+          Baseline allineata a codice e configurazione correnti.
+        </q-card-section>
         <q-card-section v-if="drift && !drift.error">
           <div class="text-body1" :class="driftHeadlineClass()">
             {{ driftHeadlineIt() }}
@@ -380,6 +387,9 @@ export default {
     profile() {
       return (this.profileText || '').trim()
     },
+    selectedBaselineCompatibility() {
+      return this.baselineOptions.find((option) => option.value === this.selectedBaselineId)?.compatibility || null
+    },
     indicators() {
       const o = this.overview || {}
       const openAlerts = (o.open_guardrail_alerts || []).length
@@ -583,10 +593,37 @@ export default {
       if (!p) { this.baselineOptions = []; return }
       try {
         const { data } = await api.get(`/dyn/obs/watchtower/cron/${encodeURIComponent(p)}/baselines`)
-        this.baselineOptions = (data || []).map((b) => ({
-          label: `${b.label} (${b.window_start}→${b.window_end}, ${b.sample_size} trade)`, value: b.id,
-        }))
+        if (p !== this.profile) return
+        const rows = [...(data || [])].sort((a, b) => {
+          const aRank = a.compatibility?.is_default ? 0 : (a.compatibility?.status === 'compatible' ? 1 : 2)
+          const bRank = b.compatibility?.is_default ? 0 : (b.compatibility?.status === 'compatible' ? 1 : 2)
+          return aRank - bRank
+        })
+        this.baselineOptions = rows.map((b) => {
+          const status = b.compatibility?.status || 'unknown'
+          const statusLabel = { compatible: 'allineata', different: 'diversa', unknown: 'legacy' }[status] || status
+          return {
+            label: `${b.label} · ${statusLabel} (${b.window_start}→${b.window_end}, ${b.sample_size} trade)`,
+            value: b.id,
+            compatibility: b.compatibility || { status: 'unknown', differences: ['provenance_missing'] },
+          }
+        })
+        const defaultBaseline = this.baselineOptions.find((option) => option.compatibility?.is_default)
+        this.selectedBaselineId = defaultBaseline?.value || null
       } catch (e) { this.baselineOptions = [] }
+    },
+    baselineCompatibilityMessage(compatibility) {
+      const differences = compatibility?.differences || []
+      if (compatibility?.status === 'unknown') {
+        return 'Baseline senza provenienza completa o contesto corrente non risolvibile: confronto solo diagnostico.'
+      }
+      const labels = {
+        strategy: 'strategia', params_hash: 'parametri', ticker: 'universo ticker', provider: 'provider',
+        code_commit: 'commit applicazione', core_commit: 'commit bt-core',
+        code_checkout_dirty: 'checkout applicazione non pulito', core_checkout_dirty: 'checkout bt-core non pulito',
+      }
+      const changed = differences.map((key) => labels[key] || key).join(', ')
+      return `Baseline non allineata (${changed || 'configurazione diversa'}): confronto solo diagnostico, nessuna azione automatica.`
     },
     async checkDrift() {
       if (!this.selectedBaselineId) { this.drift = null; return }
