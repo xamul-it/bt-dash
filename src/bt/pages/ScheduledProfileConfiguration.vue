@@ -150,6 +150,12 @@
         <q-card-section v-else-if="selectedBaselineCompatibility" class="text-caption text-positive q-pt-none">
           Baseline allineata a codice e configurazione correnti.
         </q-card-section>
+        <q-card-section v-if="overview?.latest_profile_baseline_drift_check" class="text-caption text-grey-8">
+          Ultimo controllo schedulato: {{ dateOnly(overview.latest_profile_baseline_drift_check.checked_at) }} ·
+          <span :class="overview.latest_profile_baseline_drift_check.status === 'warning' ? 'text-orange-9' : 'text-positive'">
+            {{ overview.latest_profile_baseline_drift_check.status }}
+          </span>
+        </q-card-section>
         <q-card-section v-if="drift && !drift.error">
           <div class="text-body1" :class="driftHeadlineClass()">
             {{ driftHeadlineIt() }}
