@@ -151,18 +151,24 @@
           Baseline allineata a codice e configurazione correnti.
         </q-card-section>
         <q-card-section v-if="overview?.latest_profile_baseline_drift_check" class="text-caption text-grey-8">
-          Ultimo controllo schedulato: {{ dateOnly(overview.latest_profile_baseline_drift_check.checked_at) }} ·
+          Ultimo controllo schedulato disponibile:
+          {{ dateOnly(overview.latest_profile_baseline_drift_check.checked_at) }} ·
+          baseline #{{ overview.latest_profile_baseline_drift_check.baseline_id }} ·
           <span :class="overview.latest_profile_baseline_drift_check.status === 'warning' ? 'text-orange-9' : 'text-positive'">
             {{ overview.latest_profile_baseline_drift_check.status }}
           </span>
+          ·
+          <q-badge v-if="overview?.profile_baseline_drift_state?.status === 'current'"
+                   color="positive" label="corrente" />
+          <q-badge v-else color="grey-7" label="storico — non corrente" />
         </q-card-section>
-        <q-card-section v-else-if="overview?.profile_baseline_drift_state?.status === 'no_compatible_baseline'"
+        <q-card-section v-if="overview?.profile_baseline_drift_state?.status === 'no_compatible_baseline'"
                         class="text-caption text-orange-9">
-          Nessun controllo schedulato corrente: non esiste una baseline allineata al BACK attuale.
+          Non esiste una baseline allineata al BACK attuale. L’eventuale controllo mostrato sopra è conservato come storico.
         </q-card-section>
         <q-card-section v-else-if="overview?.profile_baseline_drift_state?.status === 'not_checked_current_baseline'"
                         class="text-caption text-grey-8">
-          La baseline corrente non è ancora stata verificata dal controllo schedulato.
+          La baseline corrente non è ancora stata verificata. L’eventuale controllo mostrato sopra appartiene a una baseline precedente.
         </q-card-section>
         <q-card-section v-if="drift && !drift.error">
           <div class="text-body1" :class="driftHeadlineClass()">
