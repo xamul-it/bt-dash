@@ -186,6 +186,27 @@
         <q-card-section v-else class="text-grey-6">
           Seleziona una baseline per verificare la coerenza del backtest recente.
         </q-card-section>
+        <q-separator />
+        <q-card-section class="text-subtitle2 text-grey-8">Storico controlli schedulati</q-card-section>
+        <q-table :rows="driftHistory" :columns="driftHistoryColumns" row-key="id"
+                 dense flat :loading="driftHistoryLoading"
+                 :pagination="{ rowsPerPage: 25 }" :rows-per-page-options="[25, 50, 100, 0]"
+                 no-data-label="Nessun controllo schedulato registrato">
+          <template #body-cell-checked_at="props">
+            <q-td :props="props">{{ dateTime(props.row.checked_at) }}</q-td>
+          </template>
+          <template #body-cell-status="props">
+            <q-td :props="props">
+              <q-badge :color="scheduledDriftStatusColor(props.row.status)" :label="props.row.status" />
+            </q-td>
+          </template>
+          <template #body-cell-relation="props">
+            <q-td :props="props">
+              <q-badge :color="props.row.relation === 'current' ? 'positive' : 'grey-7'"
+                       :label="driftRelationLabel(props.row.relation)" />
+            </q-td>
+          </template>
+        </q-table>
       </q-card>
 
       <!-- Sezione 4 — Link successivo -->
@@ -401,6 +422,15 @@ export default {
       drift: null,
       driftLoading: false,
       recentWindowDays: 10,
+      driftHistory: [],
+      driftHistoryLoading: false,
+      driftHistoryColumns: [
+        { name: 'checked_at', label: 'Eseguito il', field: 'checked_at', align: 'left', sortable: true },
+        { name: 'baseline', label: 'Baseline', field: row => row.baseline_id != null ? `${row.baseline_label || 'baseline'} (#${row.baseline_id})` : 'non associata', align: 'left' },
+        { name: 'status', label: 'Esito', field: 'status', align: 'left', sortable: true },
+        { name: 'score', label: 'Score', field: row => row.score == null ? '—' : Number(row.score).toFixed(3), align: 'right' },
+        { name: 'relation', label: 'Riferimento', field: 'relation', align: 'left', sortable: true },
+      ],
     }
   },
   computed: {
@@ -579,6 +609,7 @@ export default {
       this.profileText = ''
       this.overview = null
       this.loadError = ''
+      this.driftHistory = []
     },
     scheduleLoad() {
       if (this._debounce) clearTimeout(this._debounce)
@@ -607,6 +638,23 @@ export default {
       this.selectedBaselineId = null
       this.drift = null
       this.loadBaselineOptions()
+      this.loadDriftHistory()
+    },
+    async loadDriftHistory() {
+      const p = this.profile
+      if (!p) { this.driftHistory = []; return }
+      this.driftHistoryLoading = true
+      try {
+        const { data } = await api.get(
+          `/dyn/obs/watchtower/cron/${encodeURIComponent(p)}/baseline-drift-checks`,
+          { params: { limit: 5000 } },
+        )
+        if (p === this.profile) this.driftHistory = data || []
+      } catch (e) {
+        if (p === this.profile) this.driftHistory = []
+      } finally {
+        if (p === this.profile) this.driftHistoryLoading = false
+      }
     },
     async loadBaselineOptions() {
       const p = this.profile
@@ -672,6 +720,15 @@ export default {
       if (status === 'warning' || status === 'no_compatible_baseline') return 'text-orange-9'
       return 'text-positive'
     },
+    scheduledDriftStatusColor(status) {
+      if (status === 'error') return 'negative'
+      if (status === 'warning' || status === 'no_compatible_baseline') return 'orange-8'
+      if (status === 'insufficient_recent_data') return 'grey-7'
+      return 'positive'
+    },
+    driftRelationLabel(relation) {
+      return { current: 'corrente', historical: 'storico', unassociated: 'non associato' }[relation] || relation
+    },
     driftHeadlineClass() {
       const s = this.drift && this.drift.status
       if (s === 'warning') return 'text-orange-9'
@@ -693,6 +750,11 @@ export default {
     dateOnly(value) {
       if (!value) return '—'
       return String(value).slice(0, 10)
+    },
+    dateTime(value) {
+      if (!value) return '—'
+      const parsed = new Date(value)
+      return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString('it-IT')
     },
     bps(value) {
       const v = Number(value)
