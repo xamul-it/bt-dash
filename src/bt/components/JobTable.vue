@@ -6,7 +6,7 @@
           <template v-if="col.name === 'job_status'">
             <q-btn color="blue" @click="editJob(props.row.id)" icon="edit" flat
               dense><q-tooltip>Edit</q-tooltip></q-btn>
-            <q-btn color="amber" v-if="props.row.next_run_time != 'None'" @click="pauseJob(props.row.id)"
+            <q-btn color="amber" v-if="props.row.enabled" @click="pauseJob(props.row.id)"
               icon="pause_circle_filled" flat dense hint="Pause"><q-tooltip>Pause</q-tooltip></q-btn>
             <q-btn color="amber" v-else @click="resumeJob(props.row.id)" icon="not_started" flat
               dense><q-tooltip>Resume</q-tooltip></q-btn>
@@ -16,7 +16,7 @@
               dense><q-tooltip>Delete</q-tooltip></q-btn>
           </template>
           <template v-else-if="col.name === 'next_run_time'">
-            {{ props.row["next_run_time"] ? props.row["next_run_time"] : 'Paused' }}
+            {{ props.row.enabled ? props.row.next_run_time : 'Disabilitato' }}
           </template>
           <template v-else>
             <q-tooltip>
@@ -57,7 +57,7 @@ export default defineComponent({
         { name: 'args', align: 'left', label: 'Arguments', field: 'args' },
         { name: 'trigger', align: 'left', label: 'Trigger', field: 'trigger' },
         { name: 'status', align: 'left', label: 'Trigger', field: 'status' },
-        { name: 'job_status', label: 'Status', field: row => row.next_run_time == 'None' ? 'Paused' : 'Running', sortable: false },
+        { name: 'job_status', label: 'Status', field: row => row.enabled ? 'Abilitato' : 'Disabilitato', sortable: false },
       ]
     };
   },
