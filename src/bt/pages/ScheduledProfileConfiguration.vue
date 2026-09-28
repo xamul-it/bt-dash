@@ -156,6 +156,14 @@
             {{ overview.latest_profile_baseline_drift_check.status }}
           </span>
         </q-card-section>
+        <q-card-section v-else-if="overview?.profile_baseline_drift_state?.status === 'no_compatible_baseline'"
+                        class="text-caption text-orange-9">
+          Nessun controllo schedulato corrente: non esiste una baseline allineata al BACK attuale.
+        </q-card-section>
+        <q-card-section v-else-if="overview?.profile_baseline_drift_state?.status === 'not_checked_current_baseline'"
+                        class="text-caption text-grey-8">
+          La baseline corrente non è ancora stata verificata dal controllo schedulato.
+        </q-card-section>
         <q-card-section v-if="drift && !drift.error">
           <div class="text-body1" :class="driftHeadlineClass()">
             {{ driftHeadlineIt() }}
