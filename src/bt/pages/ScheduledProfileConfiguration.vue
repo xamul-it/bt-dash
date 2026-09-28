@@ -153,8 +153,8 @@
         <q-card-section v-if="overview?.latest_profile_baseline_drift_check" class="text-caption text-grey-8">
           Ultimo controllo schedulato disponibile:
           {{ dateOnly(overview.latest_profile_baseline_drift_check.checked_at) }} ·
-          baseline #{{ overview.latest_profile_baseline_drift_check.baseline_id }} ·
-          <span :class="overview.latest_profile_baseline_drift_check.status === 'warning' ? 'text-orange-9' : 'text-positive'">
+          baseline {{ overview.latest_profile_baseline_drift_check.baseline_id != null ? '#' + overview.latest_profile_baseline_drift_check.baseline_id : 'non associata' }} ·
+          <span :class="scheduledDriftStatusClass(overview.latest_profile_baseline_drift_check.status)">
             {{ overview.latest_profile_baseline_drift_check.status }}
           </span>
           ·
@@ -666,6 +666,11 @@ export default {
       if (this.drift.status === 'missing_baseline') return 'Baseline senza campione sufficiente.'
       if (this.drift.status === 'insufficient_recent_data') return this.drift.note || 'Finestra recente senza trade: confronto non calcolabile.'
       return 'Backtest recente statisticamente coerente con la baseline.'
+    },
+    scheduledDriftStatusClass(status) {
+      if (status === 'error') return 'text-negative'
+      if (status === 'warning' || status === 'no_compatible_baseline') return 'text-orange-9'
+      return 'text-positive'
     },
     driftHeadlineClass() {
       const s = this.drift && this.drift.status
