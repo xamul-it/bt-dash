@@ -625,6 +625,7 @@ export default {
       }
       const labels = {
         strategy: 'strategia', params_hash: 'parametri', ticker: 'universo ticker', provider: 'provider',
+        alpaca_feed: 'feed dati', timeframe: 'timeframe', margin_leverage: 'leva', commission: 'commissioni',
         code_commit: 'commit applicazione', core_commit: 'commit bt-core',
         code_checkout_dirty: 'checkout applicazione non pulito', core_checkout_dirty: 'checkout bt-core non pulito',
       }
