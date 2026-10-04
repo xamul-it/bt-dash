@@ -60,20 +60,20 @@
             </q-card-section>
             <q-separator />
             <q-card-section>
-              <div v-if="!latestResult" class="text-grey-6">
-                Nessuna riconciliazione ancora eseguita per questo profilo.
+              <div v-if="!latestActivity" class="text-grey-6">
+                Nessun run o riconciliazione ancora registrato per questo profilo.
               </div>
               <template v-else>
                 <div class="text-body1">
-                  <b>{{ formatDate(latestResult.trading_date) }}</b>
-                  — {{ resultHeadline(latestResult) }}
+                  <b>{{ latestActivity.trading_date }}</b>
+                  — {{ latestActivity.detail || latestActivity.statusLabel }}
                 </div>
-                <div v-if="resultDetail(latestResult)" class="text-caption text-grey-7 q-mt-xs">
-                  {{ resultDetail(latestResult) }}
+                <div v-if="latestActivity.raw && resultDetail(latestActivity.raw)" class="text-caption text-grey-7 q-mt-xs">
+                  {{ resultDetail(latestActivity.raw) }}
                 </div>
-                <ul v-if="humanDiffs(latestResult).length" class="q-mt-sm q-mb-none q-pl-md">
-                  <li v-for="(line, idx) in humanDiffs(latestResult)" :key="idx" class="text-body2">{{ line }}</li>
-                </ul>
+                <div v-if="isExpandable(latestActivity)" class="text-caption text-primary q-mt-xs">
+                  Apri la riga corrispondente qui sotto per vedere ordini, quantità e stato broker.
+                </div>
               </template>
               <div v-if="pendingCount" class="q-mt-md">
                 <q-badge color="orange" class="q-pa-xs">
@@ -256,17 +256,17 @@
           row-key="key"
           dense
           flat
-          :pagination="{ rowsPerPage: 10 }"
+          :pagination="tablePagination"
         >
           <template #body="props">
             <q-tr
               :props="props"
-              :class="{ 'cursor-pointer': !!props.row.raw }"
-              @click="props.row.raw && toggleDay(props.row.key)"
+              :class="{ 'cursor-pointer': isExpandable(props.row) }"
+              @click="isExpandable(props.row) && toggleDay(props.row.key)"
             >
               <q-td auto-width>
                 <q-icon
-                  v-if="props.row.raw"
+                  v-if="isExpandable(props.row)"
                   :name="expandedDays.includes(props.row.key) ? 'expand_more' : 'chevron_right'"
                 />
               </q-td>
@@ -302,9 +302,45 @@
               <q-td key="detail" :props="props">{{ props.row.detail }}</q-td>
             </q-tr>
 
-            <q-tr v-if="props.row.raw && expandedDays.includes(props.row.key)" :props="props" no-hover>
+            <q-tr v-if="isExpandable(props.row) && expandedDays.includes(props.row.key)" :props="props" no-hover>
               <q-td colspan="100%" class="bg-grey-1">
                 <div class="q-pa-sm">
+                  <template v-if="Object.keys(props.row.decisions || {}).length">
+                    <div class="text-subtitle2 q-mb-xs">Decisioni di ingresso — {{ props.row.trading_date }}</div>
+                    <div class="text-caption text-grey-8 q-mb-sm">
+                      Stato immediato del run: gli ordini Alpaca sono quelli inviati/rilevati dal broker; Backtrader è il confronto locale.
+                    </div>
+                    <div class="entry-receipts">
+                      <div v-for="source in ['backtest', 'alpaca']" :key="source" class="entry-receipt">
+                        <div class="row items-center q-gutter-sm q-mb-xs">
+                          <b>{{ source === 'alpaca' ? 'Alpaca' : 'Backtrader locale' }}</b>
+                          <q-badge :color="decisionColor(props.row.decisions?.[source])">
+                            {{ decisionState(props.row.decisions?.[source]) }}
+                          </q-badge>
+                        </div>
+                        <div v-if="!props.row.decisions?.[source]" class="text-grey-6 text-caption">Nessuna ricevuta del run.</div>
+                        <template v-else>
+                          <div v-if="props.row.decisions[source].error" class="text-negative text-caption">{{ props.row.decisions[source].error }}</div>
+                          <div v-if="!(props.row.decisions[source].orders || []).length" class="text-caption text-grey-7">
+                            Nessun ordine. {{ decisionReasons(props.row.decisions[source]) }}
+                          </div>
+                          <q-list v-else dense bordered separator class="bg-white">
+                            <q-item v-for="(order, index) in props.row.decisions[source].orders" :key="`${source}-${index}`">
+                              <q-item-section>
+                                <q-item-label>{{ orderText(order) }}</q-item-label>
+                                <q-item-label caption>{{ orderBrokerDetail(order) }}</q-item-label>
+                              </q-item-section>
+                            </q-item>
+                          </q-list>
+                          <div v-if="decisionReasons(props.row.decisions[source])" class="text-caption text-orange-9 q-mt-xs">
+                            {{ decisionReasons(props.row.decisions[source]) }}
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+
+                  <template v-if="props.row.raw">
                   <div class="text-caption text-grey-8 q-mb-xs">
                     Replay su commit <code>{{ (props.row.raw.core_commit || '—').slice(0, 10) }}</code>
                     <q-badge
@@ -385,6 +421,7 @@
                       Output replay: <code>{{ props.row.raw.replay_outpath }}</code>
                     </div>
                   </template>
+                  </template>
                 </div>
               </q-td>
             </q-tr>
@@ -457,6 +494,7 @@ export default {
       loading: false,
       loadError: '',
       expandedDays: [],
+      tablePagination: { rowsPerPage: 10 },
       selectedBaselineId: null,
       markerDate: new Date().toISOString().slice(0, 10),
       markerLabel: '',
@@ -473,6 +511,9 @@ export default {
     latestResult() {
       const results = this.overview?.reconciliation_results || []
       return results.length ? results[0] : null
+    },
+    latestActivity() {
+      return this.reconciliationRows[0] || null
     },
     pendingCount() {
       return this.overview?.pending_queue?.length || 0
@@ -636,6 +677,7 @@ export default {
     statusSubline() {
       if (!this.overview) return ''
       const parts = []
+      if (this.latestActivity) parts.push(`Ultima attività: ${this.latestActivity.trading_date}`)
       if (this.latestResult) parts.push(`Ultima riconciliazione: ${this.formatDate(this.latestResult.trading_date)}`)
       if (this.pendingCount) parts.push(`${this.pendingCount} giorni in coda`)
       return parts.join(' — ') || 'Nessun dato di riconciliazione ancora disponibile'
@@ -691,6 +733,46 @@ export default {
       if (Object.values(decisions || {}).some((d) => d?.run_status === 'failed')) return 'negative'
       if (Object.values(decisions || {}).some((d) => d?.run_status === 'running')) return 'orange'
       return 'primary'
+    },
+    isExpandable(row) {
+      return Boolean(row?.raw || Object.keys(row?.decisions || {}).length || Object.keys(row?.settlements || {}).length)
+    },
+    decisionState(decision) {
+      if (!decision) return 'non ricevuto'
+      if (decision.run_status === 'failed') return 'errore'
+      if (decision.run_status === 'running') return 'in esecuzione'
+      if (decision.outcome === 'no_orders') return 'nessun ordine'
+      return decision.outcome === 'orders' ? 'ordini' : 'completato'
+    },
+    decisionColor(decision) {
+      if (!decision) return 'grey-6'
+      if (decision.run_status === 'failed') return 'negative'
+      if (decision.run_status === 'running') return 'orange'
+      if (decision.outcome === 'no_orders') return 'blue-grey'
+      return 'primary'
+    },
+    decisionReasons(decision) {
+      return (decision?.reasons || [])
+        .map((reason) => reason?.label || reason?.detail || reason?.code || String(reason))
+        .filter(Boolean)
+        .join(' · ')
+    },
+    orderText(order) {
+      if (!order) return 'Ordine non disponibile'
+      const symbol = order.symbol || '—'
+      const side = String(order.side || '').toUpperCase() || 'ORDINE'
+      const qty = order.filled_qty ?? order.qty
+      const price = order.filled_avg_price ?? order.reference_price
+      const execution = order.broker_status || order.status || (order.execution_effective === false ? 'non eseguito' : 'inviato')
+      return `${side} ${symbol} · ${this.qty(qty)}${price != null ? ` @ ${this.num(price)}` : ''} · ${execution}`
+    },
+    orderBrokerDetail(order) {
+      if (!order) return ''
+      const parts = []
+      if (order.client_order_id) parts.push(`client id ${order.client_order_id}`)
+      if (order.alpaca_order_id || order.id) parts.push(`broker id ${order.alpaca_order_id || order.id}`)
+      if (order.execution_effective === false) parts.push('non conta come esecuzione effettiva')
+      return parts.join(' · ') || 'Dettaglio broker non ancora disponibile'
     },
     entryComparisonLabel(comparison) {
       return ({ matched: 'ingressi allineati', diverged: 'divergenza ingressi', incomplete: 'riconciliazione incompleta', error: 'errore riconciliazione' })[comparison?.status] || 'riconciliazione ingressi'
@@ -1117,6 +1199,17 @@ export default {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+.entry-receipts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+.entry-receipt {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px;
 }
 .sym-card {
   border: 1px solid rgba(0, 0, 0, 0.12);
