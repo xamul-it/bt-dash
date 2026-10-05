@@ -77,8 +77,11 @@
               </template>
               <div v-if="pendingCount" class="q-mt-md">
                 <q-badge color="orange" class="q-pa-xs">
-                  {{ pendingCount }} giorni in coda (aperti o in attesa dei parametri)
+                  {{ pendingCount }} giornate storiche da riconciliare
                 </q-badge>
+              </div>
+              <div v-if="historicalEntryIssueCount" class="text-caption text-orange-9 q-mt-sm">
+                {{ historicalEntryIssueCount }} anomalie di telemetria storiche: non cambiano l'esito dell'ultimo run.
               </div>
             </q-card-section>
           </q-card>
@@ -305,15 +308,26 @@
             <q-tr v-if="isExpandable(props.row) && expandedDays.includes(props.row.key)" :props="props" no-hover>
               <q-td colspan="100%" class="bg-grey-1">
                 <div class="q-pa-sm">
+                  <template v-if="props.row.raw && props.row.raw.status !== 'error'">
+                    <ul class="q-my-xs q-pl-md">
+                      <li
+                        v-for="(line, i) in dayReading(props.row.raw)"
+                        :key="`summary-${i}`"
+                        class="text-body2"
+                        :class="line.cls"
+                      >{{ line.text }}</li>
+                    </ul>
+                    <q-separator class="q-my-sm" />
+                  </template>
                   <template v-if="Object.keys(props.row.decisions || {}).length">
                     <div class="text-subtitle2 q-mb-xs">Decisioni di ingresso — {{ props.row.trading_date }}</div>
                     <div class="text-caption text-grey-8 q-mb-sm">
-                      Stato immediato del run: gli ordini Alpaca sono quelli inviati/rilevati dal broker; Backtrader è il confronto locale.
+                      Stato immediato del run: gli ordini Alpaca sono quelli inviati/rilevati dal broker. Backtrader mostra il piano locale d'ingresso, non un trade completo già eseguito.
                     </div>
                     <div class="entry-receipts">
                       <div v-for="source in ['backtest', 'alpaca']" :key="source" class="entry-receipt">
                         <div class="row items-center q-gutter-sm q-mb-xs">
-                          <b>{{ source === 'alpaca' ? 'Alpaca' : 'Backtrader locale' }}</b>
+                          <b>{{ source === 'alpaca' ? 'Alpaca' : backtestReceiptTitle(props.row.settlements?.backtest) }}</b>
                           <q-badge :color="decisionColor(props.row.decisions?.[source])">
                             {{ decisionState(props.row.decisions?.[source]) }}
                           </q-badge>
@@ -325,19 +339,56 @@
                             Nessun ordine. {{ decisionReasons(props.row.decisions[source]) }}
                           </div>
                           <q-list v-else dense bordered separator class="bg-white">
-                            <q-item v-for="(order, index) in props.row.decisions[source].orders" :key="`${source}-${index}`">
-                              <q-item-section>
-                                <q-item-label>{{ orderText(order) }}</q-item-label>
-                                <q-item-label caption>{{ orderBrokerDetail(order) }}</q-item-label>
-                              </q-item-section>
-                            </q-item>
+                              <q-item v-for="(order, index) in props.row.decisions[source].orders" :key="`${source}-${index}`">
+                                <q-item-section>
+                                  <q-item-label>
+                                    {{ orderText(order, source, props.row.settlements?.[source]) }}
+                                    <q-icon v-if="orderBrokerDetail(order, source)" name="info_outline" size="15px" class="cursor-help q-ml-xs">
+                                      <q-tooltip max-width="520px">{{ orderBrokerDetail(order, source) }}</q-tooltip>
+                                    </q-icon>
+                                  </q-item-label>
+                                  <q-item-label
+                                    v-if="source === 'backtest' && backtestOrderSettlement(order, props.row.settlements?.backtest)"
+                                    caption
+                                    :class="pctClass(backtestOrderSettlement(order, props.row.settlements?.backtest).pnl_pct)"
+                                  >
+                                    {{ backtestOrderSettlementText(order, props.row.settlements?.backtest) }}
+                                  </q-item-label>
+                                  <q-item-label
+                                    v-if="source === 'alpaca' && alpacaOrderSettlement(order, props.row.settlements?.alpaca)"
+                                    caption
+                                    :class="pctClass(alpacaOrderSettlement(order, props.row.settlements?.alpaca).pnl_pct)"
+                                  >
+                                    {{ alpacaOrderSettlementText(order, props.row.settlements?.alpaca) }}
+                                  </q-item-label>
+                                </q-item-section>
+                              </q-item>
                           </q-list>
                           <div v-if="decisionReasons(props.row.decisions[source])" class="text-caption text-orange-9 q-mt-xs">
                             {{ decisionReasons(props.row.decisions[source]) }}
                           </div>
+                          <div v-if="source === 'backtest'" class="text-caption text-grey-7 q-mt-xs">
+                            {{ backtestSettlementExplanation(props.row.settlements?.backtest) }}
+                          </div>
                         </template>
                       </div>
                     </div>
+                  </template>
+
+                  <template v-if="(props.row.alpacaActivity || []).length">
+                    <q-expansion-item dense class="q-mt-md" :label="`Ordini Alpaca ricevuti dal broker — ${props.row.trading_date}`" header-class="text-primary text-weight-medium">
+                      <div class="text-caption text-grey-8 q-mb-sm">
+                        Include le chiusure OPG del mattino: sono eventi distinti dalla decisione CLS di ingresso mostrata sopra.
+                      </div>
+                      <q-list dense bordered separator class="bg-white">
+                        <q-item v-for="order in props.row.alpacaActivity" :key="order.alpaca_order_id">
+                          <q-item-section>
+                            <q-item-label>{{ alpacaActivityText(order) }}</q-item-label>
+                            <q-item-label caption>{{ alpacaActivityDetail(order) }}</q-item-label>
+                          </q-item-section>
+                        </q-item>
+                      </q-list>
+                    </q-expansion-item>
                   </template>
 
                   <template v-if="props.row.raw">
@@ -372,15 +423,6 @@
                   </div>
 
                   <template v-else>
-                    <ul class="q-my-xs q-pl-md">
-                      <li
-                        v-for="(line, i) in dayReading(props.row.raw)"
-                        :key="i"
-                        class="text-body2"
-                        :class="line.cls"
-                      >{{ line.text }}</li>
-                    </ul>
-
                     <div class="sym-cards q-mt-sm">
                       <div
                         v-for="card in symbolCards(props.row.raw)"
@@ -515,6 +557,18 @@ export default {
     latestActivity() {
       return this.reconciliationRows[0] || null
     },
+    latestEntryComparison() {
+      const comparisons = this.overview?.entry_comparisons || []
+      return comparisons.length ? comparisons[0] : null
+    },
+    historicalEntryIssueCount() {
+      const latestDate = String(this.latestEntryComparison?.trading_date || '').slice(0, 10)
+      if (!latestDate) return 0
+      return (this.overview?.entry_comparisons || []).filter((item) => {
+        const day = String(item.trading_date || '').slice(0, 10)
+        return day < latestDate && ['diverged', 'error'].includes(item.status)
+      }).length
+    },
     pendingCount() {
       return this.overview?.pending_queue?.length || 0
     },
@@ -610,6 +664,7 @@ export default {
       const decisions = this.overview?.entry_decisions || []
       const settlements = this.overview?.entry_settlements || []
       const comparisons = this.overview?.entry_comparisons || []
+      const alpacaActivity = this.overview?.alpaca_order_activity || []
       const byDate = new Map()
       results.forEach((r) => {
         const day = String(r.trading_date).slice(0, 10)
@@ -632,17 +687,34 @@ export default {
         if (!byDate.has(day)) byDate.set(day, { result: null, decisions: {}, settlements: {} })
         byDate.get(day).comparison = comparison
       })
+      alpacaActivity.forEach((order) => {
+        const day = String(order.window_open).slice(0, 10)
+        if (!byDate.has(day)) byDate.set(day, { result: null, decisions: {}, settlements: {} })
+        const item = byDate.get(day)
+        if (!item.alpacaActivity) item.alpacaActivity = []
+        item.alpacaActivity.push(order)
+      })
       const rows = [...byDate.entries()].map(([day, item]) => ({
         key: `day-${day}`,
         sortDate: day,
         trading_date: this.formatDate(day),
-        statusLabel: item.comparison ? this.entryComparisonLabel(item.comparison) : (item.result ? this.rowStatusLabel(item.result) : this.entryStatusLabel(item.decisions)),
-        badgeColor: item.comparison ? this.entryComparisonColor(item.comparison) : (item.result ? this.rowBadgeColor(item.result) : this.entryStatusColor(item.decisions)),
-        detail: this.entryHeadline(item.decisions, item.settlements) || this.resultHeadline(item.result),
+        statusLabel: this.brokerActivityOverridesWatchdog(item)
+          ? this.brokerTelemetryLabel(item)
+          : (item.comparison ? this.entryComparisonLabel(item.comparison) : (item.result ? this.rowStatusLabel(item.result) : this.entryStatusLabel(item.decisions))),
+        badgeColor: this.brokerActivityOverridesWatchdog(item)
+          ? 'dark'
+          : (item.comparison ? this.entryComparisonColor(item.comparison) : (item.result ? this.rowBadgeColor(item.result) : this.entryStatusColor(item.decisions))),
+        detail: [
+          this.brokerActivityOverridesWatchdog(item) ? this.brokerTelemetryDetail(item) : '',
+          this.entryHeadline(item.decisions, item.settlements),
+          this.alpacaActivityHeadline(item.alpacaActivity),
+          this.resultHeadline(item.result),
+        ].filter(Boolean).join(' · '),
         change: item.result?.change || this.automaticChangesByDate[day] || null,
         raw: item.result,
         decisions: item.decisions,
         settlements: item.settlements,
+        alpacaActivity: item.alpacaActivity || [],
       }))
       const pendingRows = (this.overview?.pending_queue || [])
         .filter((p) => !byDate.has(String(p.trading_date).slice(0, 10)))
@@ -663,14 +735,22 @@ export default {
       if ((this.overview.open_guardrail_alerts || []).length) {
         return 'Attenzione: possibile contaminazione tra strategie sullo stesso account'
       }
-      const recentEntryComparisons = (this.overview.entry_comparisons || []).slice(0, 5)
-      if (recentEntryComparisons.some((item) => ['diverged', 'error'].includes(item.status))) {
-        return 'Divergenza rilevata nella riconciliazione degli ingressi'
+      // The banner answers one question only: did the latest scheduled entry
+      // agree? Older telemetry/replay failures remain visible below, but must
+      // not make a successful current run look failed.
+      if (this.latestEntryComparison?.status === 'matched') {
+        return this.pendingCount
+          ? 'Ultimo ingresso coerente · arretrati da recuperare'
+          : 'Ultimo ingresso coerente'
       }
-      const recentResults = (this.overview.reconciliation_results || []).slice(0, 5)
-      const hardIssue = recentResults.some((result) => result?.summary?.counts &&
-        Object.keys(result.summary.counts).some((k) => k !== 'matched' && k !== 'sizing_divergence'))
-      if (hardIssue) return 'Divergenza rilevata nell\'ultima riconciliazione'
+      if (['diverged', 'error'].includes(this.latestEntryComparison?.status)) {
+        return 'Divergenza rilevata nell\'ultimo ingresso'
+      }
+      const latestEntryDay = String(this.latestEntryComparison?.trading_date || '').slice(0, 10)
+      const latestResultDay = String(this.latestResult?.trading_date || '').slice(0, 10)
+      const hardIssue = latestResultDay >= latestEntryDay && this.latestResult?.summary?.counts &&
+        Object.keys(this.latestResult.summary.counts).some((k) => k !== 'matched' && k !== 'sizing_divergence')
+      if (hardIssue) return 'Divergenza rilevata nell\'ultima riconciliazione completa'
       if (this.overview.latest_drift_check?.status === 'warning') return 'Possibile cambio di regime nella strategia'
       return 'Tutto nella norma'
     },
@@ -678,20 +758,24 @@ export default {
       if (!this.overview) return ''
       const parts = []
       if (this.latestActivity) parts.push(`Ultima attività: ${this.latestActivity.trading_date}`)
-      if (this.latestResult) parts.push(`Ultima riconciliazione: ${this.formatDate(this.latestResult.trading_date)}`)
-      if (this.pendingCount) parts.push(`${this.pendingCount} giorni in coda`)
+      if (this.latestResult) {
+        const currentEntryDay = String(this.latestEntryComparison?.trading_date || '').slice(0, 10)
+        const resultDay = String(this.latestResult.trading_date || '').slice(0, 10)
+        parts.push(`${resultDay < currentEntryDay ? 'Ultima riconciliazione completa (storica)' : 'Ultima riconciliazione completa'}: ${this.formatDate(this.latestResult.trading_date)}`)
+      }
+      if (this.pendingCount) parts.push(`${this.pendingCount} giornate storiche da recuperare`)
       return parts.join(' — ') || 'Nessun dato di riconciliazione ancora disponibile'
     },
     statusIcon() {
       const h = this.statusHeadline
       if (h.startsWith('Attenzione') || h.startsWith('Divergenza')) return 'error'
-      if (h.startsWith('Possibile')) return 'warning'
+      if (h.startsWith('Possibile') || h.includes('arretrati')) return 'warning'
       return 'check_circle'
     },
     statusBannerClass() {
       const h = this.statusHeadline
       if (h.startsWith('Attenzione') || h.startsWith('Divergenza')) return 'bg-negative'
-      if (h.startsWith('Possibile')) return 'bg-warning text-dark'
+      if (h.startsWith('Possibile') || h.includes('arretrati')) return 'bg-warning text-dark'
       return 'bg-positive'
     },
   },
@@ -724,6 +808,16 @@ export default {
       if (!decisions || (!decisions.backtest && !decisions.alpaca)) return ''
       return `Backtest: ${this.entryDecisionLabel(decisions.backtest, settlements.backtest)} · Alpaca: ${this.entryDecisionLabel(decisions.alpaca, settlements.alpaca)}`
     },
+    alpacaActivityHeadline(orders) {
+      const closes = (orders || []).filter((order) => order.intent === 'CLOSE')
+      if (!closes.length) return ''
+      const failed = closes.filter((order) => ['rejected', 'canceled', 'expired', 'failed'].includes(String(order.status || '').toLowerCase()))
+      const filled = closes.filter((order) => String(order.status || '').toLowerCase() === 'filled')
+      const parts = []
+      if (failed.length) parts.push(`${failed.length} chiusura/e Alpaca non eseguita/e`)
+      if (filled.length) parts.push(`${filled.length} chiusura/e Alpaca eseguita/e`)
+      return parts.join(', ')
+    },
     entryStatusLabel(decisions) {
       if (Object.values(decisions || {}).some((d) => d?.run_status === 'failed')) return 'errore run'
       if (Object.values(decisions || {}).some((d) => d?.run_status === 'running')) return 'in esecuzione'
@@ -734,8 +828,29 @@ export default {
       if (Object.values(decisions || {}).some((d) => d?.run_status === 'running')) return 'orange'
       return 'primary'
     },
+    brokerActivityOverridesWatchdog(item) {
+      if (!item?.alpacaActivity?.length) return false
+      const errors = Object.values(item.decisions || {})
+        .filter((decision) => decision?.run_status === 'failed')
+        .map((decision) => String(decision.error || ''))
+      return errors.length > 0 && errors.every((error) => error.includes('watchdog deadline'))
+    },
+    watchdogMissingSources(item) {
+      return Object.entries(item?.decisions || {})
+        .filter(([, decision]) => decision?.run_status === 'failed' && String(decision.error || '').includes('watchdog deadline'))
+        .map(([source]) => source === 'backtest' ? 'Backtest' : 'Alpaca')
+    },
+    brokerTelemetryLabel(item) {
+      const missing = this.watchdogMissingSources(item)
+      return `telemetria incompleta${missing.length ? `: ${missing.join(' / ')} non tracciato` : ''}`
+    },
+    brokerTelemetryDetail(item) {
+      const orders = item?.alpacaActivity?.length || 0
+      const missing = this.watchdogMissingSources(item)
+      return `Broker: ${orders} ordine/i rilevato/i; ricevuta Watchtower assente per ${missing.join(' / ') || 'il run'}. Confronto Backtest/Alpaca non affidabile.`
+    },
     isExpandable(row) {
-      return Boolean(row?.raw || Object.keys(row?.decisions || {}).length || Object.keys(row?.settlements || {}).length)
+      return Boolean(row?.raw || Object.keys(row?.decisions || {}).length || Object.keys(row?.settlements || {}).length || row?.alpacaActivity?.length)
     },
     decisionState(decision) {
       if (!decision) return 'non ricevuto'
@@ -751,28 +866,86 @@ export default {
       if (decision.outcome === 'no_orders') return 'blue-grey'
       return 'primary'
     },
+    alpacaActivityText(order) {
+      const intent = order.intent === 'CLOSE' ? 'CHIUSURA' : (order.intent === 'OPEN' ? 'APERTURA' : 'ORDINE')
+      return `${intent} ${order.symbol || '—'} · ${(order.side || '—').toUpperCase()} · ${order.status || 'stato sconosciuto'}`
+    },
+    alpacaActivityDetail(order) {
+      const parts = []
+      if (order.time_in_force) parts.push(String(order.time_in_force).toUpperCase())
+      if (order.qty !== null && order.qty !== undefined) parts.push(`qty ${this.qty(order.filled_qty || 0)} / ${this.qty(order.qty)}`)
+      if (order.filled_avg_price) parts.push(`prezzo ${this.num(order.filled_avg_price)}`)
+      if (order.position_intent) parts.push(order.position_intent)
+      return parts.join(' · ') || 'Nessun dettaglio broker disponibile'
+    },
     decisionReasons(decision) {
       return (decision?.reasons || [])
         .map((reason) => reason?.label || reason?.detail || reason?.code || String(reason))
         .filter(Boolean)
         .join(' · ')
     },
-    orderText(order) {
+    backtestReceiptTitle(settlements) {
+      return settlements?.some((item) => item.status === 'closed')
+        ? 'Backtrader — trade simulati completi'
+        : 'Backtrader — piano simulato'
+    },
+    backtestOrderSettlement(order, settlements) {
+      const symbol = String(order?.symbol || '').toUpperCase()
+      return (settlements || []).find((item) => item.symbol === symbol && item.side === 'buy') || null
+    },
+    backtestOrderSettlementText(order, settlements) {
+      const settled = this.backtestOrderSettlement(order, settlements)
+      if (!settled || settled.status !== 'closed') return ''
+      const pnl = Number(settled.pnl || 0)
+      return `CHIUSURA · SELL ${settled.symbol} · ${this.qty(settled.qty)} @ ${this.num(settled.exit_price)} · ${this.formatDate(settled.exit_date)} · P&L ${pnl >= 0 ? '+' : ''}${this.num(pnl)} (${this.signedPct(settled.pnl_pct)})`
+    },
+    alpacaOrderSettlement(order, settlements) {
+      const symbol = String(order?.symbol || '').toUpperCase()
+      const filled = Number(order?.filled_qty || 0) > 0 || String(order?.broker_status || order?.status || '').toLowerCase() === 'filled'
+      if (!filled) return null
+      const settled = (settlements || []).find((item) => item.symbol === symbol && item.side === 'buy')
+      return settled?.status === 'closed' ? settled : null
+    },
+    alpacaOrderSettlementText(order, settlements) {
+      const settled = this.alpacaOrderSettlement(order, settlements)
+      if (!settled) return ''
+      const pnl = Number(settled.pnl || 0)
+      const marker = settled.detail?.exit_execution
+      return `CHIUSURA · SELL ${settled.symbol} · ${this.qty(settled.qty)} @ ${this.num(settled.exit_price)} · ${this.formatDate(settled.exit_date)}${marker ? ` · ${marker}` : ''} · P&L ${pnl >= 0 ? '+' : ''}${this.num(pnl)} (${this.signedPct(settled.pnl_pct)})`
+    },
+    orderText(order, source, settlements) {
       if (!order) return 'Ordine non disponibile'
       const symbol = order.symbol || '—'
       const side = String(order.side || '').toUpperCase() || 'ORDINE'
       const qty = order.filled_qty ?? order.qty
       const price = order.filled_avg_price ?? order.reference_price
+      if (source === 'backtest') {
+        const settled = this.backtestOrderSettlement(order, settlements)
+        return `${side} ${symbol} · ${this.qty(qty)}${price != null ? ` @ ${this.num(price)}` : ''} · ${settled?.status === 'closed' ? 'APERTURA' : 'apertura prevista'}`
+      }
       const execution = order.broker_status || order.status || (order.execution_effective === false ? 'non eseguito' : 'inviato')
-      return `${side} ${symbol} · ${this.qty(qty)}${price != null ? ` @ ${this.num(price)}` : ''} · ${execution}`
+      const settled = this.alpacaOrderSettlement(order, settlements)
+      const marker = settled?.detail?.entry_execution
+      return `${side} ${symbol} · ${this.qty(qty)}${price != null ? ` @ ${this.num(price)}` : ''} · ${execution}${marker ? ` · ${marker}` : ''}`
     },
-    orderBrokerDetail(order) {
+    orderBrokerDetail(order, source) {
       if (!order) return ''
       const parts = []
+      if (source === 'backtest') {
+        if (order.client_order_id) parts.push(`id tecnico locale ${order.client_order_id}`)
+        return parts.join(' · ') || 'Nessun identificativo locale disponibile'
+      }
       if (order.client_order_id) parts.push(`client id ${order.client_order_id}`)
       if (order.alpaca_order_id || order.id) parts.push(`broker id ${order.alpaca_order_id || order.id}`)
       if (order.execution_effective === false) parts.push('non conta come esecuzione effettiva')
       return parts.join(' · ') || 'Dettaglio broker non ancora disponibile'
+    },
+    backtestSettlementExplanation(settlements) {
+      const label = this.settlementLabel(settlements)
+      if (!settlements?.length || settlements.every((item) => item.status === 'pending')) {
+        return `Chiusura simulata: ${label}. Non può essere nota nella decisione d'ingresso; verrà mostrata soltanto da un replay con la candela successiva.`
+      }
+      return `Esito dei trade completi nel replay: ${label}.`
     },
     entryComparisonLabel(comparison) {
       return ({ matched: 'ingressi allineati', diverged: 'divergenza ingressi', incomplete: 'riconciliazione incompleta', error: 'errore riconciliazione' })[comparison?.status] || 'riconciliazione ingressi'
