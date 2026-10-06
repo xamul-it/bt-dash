@@ -108,9 +108,11 @@
                 </div>
               </template>
               <div v-if="pendingCount" class="q-mt-md">
-                <q-badge color="orange" class="q-pa-xs">
-                  {{ pendingCount }} giornate storiche da riconciliare
-                </q-badge>
+                <span class="text-caption text-orange-9">In attesa di riconciliazione:</span>
+                <q-btn v-for="pending in pendingDates" :key="pending.day" flat dense no-caps color="orange-9"
+                  :label="pending.label" @click="goToDay(pending.day)">
+                  <q-tooltip>{{ pending.detail }} · vai alla riga</q-tooltip>
+                </q-btn>
               </div>
               <div v-if="historicalEntryIssueCount" class="text-caption text-orange-9 q-mt-sm">
                 {{ historicalEntryIssueCount }} anomalie di telemetria storiche: non cambiano l'esito dell'ultimo run.
@@ -127,7 +129,7 @@
       </div>
 
       <!-- Performance vs storia -->
-      <q-card flat bordered class="q-mb-md">
+      <q-card id="reconciliation-table" flat bordered class="q-mb-md">
         <q-card-section>
           <div class="text-subtitle2 text-grey-8">La strategia performa come in passato?</div>
         </q-card-section>
@@ -225,7 +227,7 @@
           row-key="key"
           dense
           flat
-          :pagination="tablePagination"
+          v-model:pagination="tablePagination"
         >
           <template #body="props">
             <q-tr
@@ -548,6 +550,18 @@ export default {
     },
     pendingCount() {
       return this.overview?.pending_queue?.length || 0
+    },
+    pendingDates() {
+      return (this.overview?.pending_queue || []).map((pending) => {
+        const day = String(pending.trading_date).slice(0, 10)
+        return {
+          day,
+          label: this.formatDate(day),
+          detail: pending.reason === 'no_exit_leg_evidence_yet'
+            ? 'in attesa dell’evidenza di chiusura'
+            : (pending.reason || 'in attesa di elaborazione'),
+        }
+      })
     },
     currentParamsEqual() {
       const version = this.overview?.current_version
@@ -1103,6 +1117,15 @@ export default {
       const i = this.expandedDays.indexOf(key)
       if (i >= 0) this.expandedDays.splice(i, 1)
       else this.expandedDays.push(key)
+    },
+    goToDay(day) {
+      const key = `day-${day}`
+      const index = this.reconciliationRows.findIndex((row) => row.key === key || row.key === `pend-${day}`)
+      if (index >= 0) {
+        this.tablePagination.page = Math.floor(index / this.tablePagination.rowsPerPage) + 1
+        if (!this.expandedDays.includes(key)) this.expandedDays.push(key)
+      }
+      this.$nextTick(() => document.getElementById('reconciliation-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     },
     daySummary(result) {
       return result?.summary || {}
