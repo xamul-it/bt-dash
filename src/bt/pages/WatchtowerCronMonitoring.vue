@@ -463,7 +463,10 @@
               </q-item-label>
               <q-item-label caption>
                 commit codice: {{ v.core_commit ? v.core_commit.slice(0, 10) : 'non registrato' }}
-                — hash parametri: {{ v.params_hash.slice(0, 10) }}
+                — hash parametri:
+                <q-btn flat dense no-caps color="primary" :label="v.params_hash.slice(0, 10)" @click="copyHash(v.params_hash)">
+                  <q-tooltip>{{ v.params_hash }} · clicca per copiare</q-tooltip>
+                </q-btn>
               </q-item-label>
             </q-item-section>
           </q-item>
@@ -737,6 +740,14 @@ export default {
     await this.loadProfiles()
   },
   methods: {
+    async copyHash(hash) {
+      try {
+        await navigator.clipboard.writeText(hash)
+        this.$q.notify({ color: 'positive', message: 'Hash parametri copiato' })
+      } catch (error) {
+        this.$q.notify({ color: 'negative', message: 'Copia non disponibile nel browser' })
+      }
+    },
     async copyCurrentParams() {
       const text = this.currentParamsEqual
         ? this.currentParamsText

@@ -293,7 +293,11 @@
             </div>
             <div class="col-6 col-md-6">
               <div class="text-caption text-grey-7">Params hash</div>
-              <div class="text-body2 ellipsis">{{ baselineRecord.params_hash || 'NA' }}</div>
+              <q-btn v-if="baselineRecord.params_hash" flat dense no-caps color="primary" class="text-body2" :label="baselineRecord.params_hash"
+                @click="copyHash(baselineRecord.params_hash)">
+                <q-tooltip>{{ baselineRecord.params_hash }} · clicca per copiare</q-tooltip>
+              </q-btn>
+              <div v-else class="text-body2">NA</div>
             </div>
             <div class="col-12">
               <div class="text-caption text-grey-7">Source root</div>
@@ -607,6 +611,15 @@ export default defineComponent({
     const baselineSourceRoot = ref('/home/htpc/backtrader/out/intraday/HMA')
     const isComputingBaseline = ref(false)
     const baselineJobStatus = ref(null)
+
+    const copyHash = async (hash) => {
+      try {
+        await navigator.clipboard.writeText(hash)
+        Notify.create({ type: 'positive', message: 'Hash parametri copiato' })
+      } catch {
+        Notify.create({ type: 'negative', message: 'Copia non disponibile nel browser' })
+      }
+    }
 
     const runColumns = [
       { name: 'run_id', label: 'Run ID', field: 'run_id', align: 'left', sortable: true },
@@ -1846,6 +1859,7 @@ export default defineComponent({
       baselineSourcePaths,
       isComputingBaseline,
       baselineJobStatus,
+      copyHash,
       baselineStatus,
       baselineRecord,
       baselineMatchMode,
