@@ -175,7 +175,7 @@
           <template v-else>
             <q-select v-model="selectedBaselineId" :options="baselineOptions" dense outlined emit-value map-options
               label="Baseline" class="q-mb-sm" />
-            <div class="text-body1">Confronto delle finestre recenti con la baseline selezionata.</div>
+            <div class="text-body1">Confronto della baseline con i replay della riconciliazione giornaliera.</div>
             <div class="overflow-auto">
               <table class="footprint-table q-mt-sm">
                 <thead>
@@ -200,6 +200,7 @@
             <div class="text-caption text-grey-7 q-mt-sm">
               Compatibilità: test bilaterale del gain medio/trade della finestra rispetto a media e dispersione della baseline.
               Valore alto = il campione è statisticamente coerente con la baseline.
+              Le date seguono sempre il calendario di trading; eventuali giorni senza replay restano fuori dal campione.
             </div>
           </template>
         </q-card-section>
@@ -242,6 +243,7 @@
             </div>
             <div class="text-caption text-grey-7 q-mt-sm">
               I trade e i rendimenti giornalieri provengono solo dagli ordini Alpaca con uscita eseguita; la baseline resta sempre Backtrader.
+              Le date seguono sempre il calendario di trading, anche se una riconciliazione manca.
             </div>
           </template>
         </q-card-section>
@@ -585,46 +587,16 @@ export default {
       return rows.find((b) => b.id === this.selectedBaselineId) || rows[0] || null
     },
     comparisonWindows() {
-      const meta = this.prePost.pre?.source_meta || this.prePost.post?.source_meta || {}
       return [3, 5, 10, 15, 20, 25].map((days) => ({
         days,
-        comparison: meta.window_comparisons?.[String(days)] || null,
+        comparison: this.overview?.reconciliation_statistics?.backtest?.[String(days)] || null,
       }))
     },
     alpacaComparisonWindows() {
-      const completedDays = [...(this.overview?.reconciliation_results || [])]
-        .filter((result) => result.status === 'ok' && Number.isFinite(Number(result.summary?.live_day_return_pct)))
-        .sort((a, b) => String(b.trading_date).localeCompare(String(a.trading_date)))
-
-      return [3, 5, 10, 15, 20, 25].map((days) => {
-        const rows = completedDays.slice(0, days)
-        const tradeReturns = rows.flatMap((result) => (result.diffs || [])
-          .filter((diff) => ['matched', 'extra_live_order'].includes(diff.category) && diff.exit_issue == null)
-          .map((diff) => Number(diff.live_pnl_pct))
-          .filter(Number.isFinite))
-        const dailyReturns = rows.map((result) => Number(result.summary?.live_day_return_pct)).filter(Number.isFinite)
-        const mean = tradeReturns.length ? tradeReturns.reduce((sum, value) => sum + value, 0) / tradeReturns.length : null
-        const winRate = tradeReturns.length ? tradeReturns.filter((value) => value > 0).length / tradeReturns.length : null
-        const averageDailyReturn = dailyReturns.length ? dailyReturns.reduce((sum, value) => sum + value, 0) / dailyReturns.length : null
-        const oldest = rows[rows.length - 1]
-        const newest = rows[0]
-        return {
-          days,
-          comparison: {
-            recent: {
-              sample_size: tradeReturns.length,
-              window_start: oldest?.trading_date || null,
-              window_end: newest?.trading_date || null,
-              metrics: {
-                mean,
-                win_rate: winRate,
-                average_daily_return_pct: averageDailyReturn,
-                daily_sample_size: dailyReturns.length,
-              },
-            },
-          },
-        }
-      })
+      return [3, 5, 10, 15, 20, 25].map((days) => ({
+        days,
+        comparison: this.overview?.reconciliation_statistics?.alpaca?.[String(days)] || null,
+      }))
     },
     replayParamsVersion() {
       return (result) => {
@@ -1020,7 +992,12 @@ export default {
     },
     dateRange(footprint) {
       if (!footprint) return '—'
-      return `${this.formatDate(footprint.window_start)} → ${this.formatDate(footprint.window_end)}`
+      const range = `${this.formatDate(footprint.window_start)} → ${this.formatDate(footprint.window_end)}`
+      if (Number.isFinite(Number(footprint.observed_day_count))) {
+        const expected = Number(footprint.observed_day_count) + Number(footprint.missing_day_count || 0)
+        return `${range} · ${footprint.observed_day_count}/${expected} replay`
+      }
+      return range
     },
     pct(value) {
       if (value === null || value === undefined) return '—'
