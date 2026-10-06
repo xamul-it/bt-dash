@@ -14,8 +14,9 @@
           Scheduler {{ schedulerStatus === 'running' ? 'ATTIVO' : 'IN PAUSA' }}
         </q-chip>
       </div>
-      <job-table :jobs="jobs" @pause-job="pauseJob" @resume-job="resumeJob" @run-job="runJob" @delete-job="deleteJob"
-        @edit-job="openDialog" @reload="fetchJobs"></job-table>
+      <job-table :jobs="jobs" @pause-job="pauseJob" @resume-job="resumeJob" @run-job="runJob"
+        @edit-job="openDialog"></job-table>
+      <schedule-dialog ref="scheduleDialog" @save="updateJob" />
     </q-page>
   </div>
 </template>
@@ -28,7 +29,8 @@ import { constants } from 'boot/constants'
 export default defineComponent({
   name: 'SchedulerPage',
   components: {
-    JobTable: defineAsyncComponent(() => import(`src/bt/components/JobTable`))
+    JobTable: defineAsyncComponent(() => import(`src/bt/components/JobTable`)),
+    ScheduleDialog: defineAsyncComponent(() => import(`src/bt/components/ScheduleDialog`))
   },
   data() {
     return {
@@ -83,9 +85,15 @@ export default defineComponent({
         this.fetchJobs();
       });
     },
-    deleteJob(jobId) {
-      this.$axios.post(`${constants.API_BASE_URL}/dyn/sc/delete_job/${jobId}`).then(() => {
+    openDialog(job) {
+      this.$refs.scheduleDialog.open(job);
+    },
+    updateJob(payload) {
+      this.$axios.post(`${constants.API_BASE_URL}/dyn/sc/update_job`, payload).then(() => {
         this.fetchJobs();
+        this.$q.notify({ color: 'positive', message: 'Schedulazione aggiornata' });
+      }).catch(error => {
+        this.$q.notify({ color: 'negative', message: error.response?.data?.message || 'Aggiornamento non riuscito' });
       });
     },
 

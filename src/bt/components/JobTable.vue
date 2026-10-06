@@ -10,6 +10,8 @@
               dense><q-tooltip>Resume</q-tooltip></q-btn>
             <q-btn color="green" @click="confirmRun(props.row.id)" icon="play_circle_filled" flat
               dense><q-tooltip>Run</q-tooltip></q-btn>
+            <q-btn v-if="props.row.editable" color="primary" @click="$emit('edit-job', props.row)" icon="edit" flat
+              dense><q-tooltip>Modifica orario</q-tooltip></q-btn>
           </template>
           <template v-else-if="col.name === 'next_run_time'">
             {{ props.row.enabled ? props.row.next_run_time : 'Disabilitato' }}
