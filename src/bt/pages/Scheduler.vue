@@ -2,13 +2,16 @@
   <div>
     <q-page padding>
       <div class="text-h5 q-mb-md">Scheduler Control Panel</div>
+      <q-banner class="bg-blue-1 text-blue-10 q-mb-md" rounded>
+        Lo Scheduler gestisce esclusivamente Watchtower e manutenzioni dati. Le strategie che inviano ordini restano nei cron dedicati.
+      </q-banner>
       <div class="q-mb-md">
         <q-btn color="red" @click="stopScheduler" v-if="schedulerStatus == 'running'" label="Stop Scheduler"
           :disable="schedulerStatus !== 'running'" />
         <q-btn color="green" @click="startScheduler" v-if="schedulerStatus != 'running'" label="Start Scheduler"
           :disable="schedulerStatus === 'running'" />
-        <q-chip :color="schedulerStatus === 'running' ? 'green' : 'red'" text-color="white">
-          {{ schedulerStatus.toUpperCase() }}
+        <q-chip :color="schedulerStatus === 'running' ? 'green' : 'red'" text-color="white" icon="schedule">
+          Scheduler {{ schedulerStatus === 'running' ? 'ATTIVO' : 'IN PAUSA' }}
         </q-chip>
       </div>
       <job-table :jobs="jobs" @pause-job="pauseJob" @resume-job="resumeJob" @run-job="runJob" @delete-job="deleteJob"
