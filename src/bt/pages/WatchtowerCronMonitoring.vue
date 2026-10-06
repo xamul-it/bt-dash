@@ -2,9 +2,27 @@
   <q-page class="q-pa-md">
     <div class="row items-center q-col-gutter-md q-mb-md">
       <div class="col">
-        <div class="text-h5">Watchtower — Profili Cron</div>
+        <div class="text-h5">
+          Watchtower — {{ overview?.registry?.assigned_strategy || selectedProfile || 'Profili Cron' }}
+          <q-btn v-if="overview?.current_version" flat round dense icon="info" size="sm" class="q-ml-xs">
+            <q-tooltip max-width="520px" class="bg-grey-9 text-white">
+              <div class="text-weight-medium q-mb-xs">Parametri correnti</div>
+              <pre class="q-ma-none">{{ JSON.stringify(overview.current_version.stratargs, null, 2) }}</pre>
+              <template v-if="!currentParamsEqual">
+                <div class="text-weight-medium q-mt-sm q-mb-xs">Parametri replay Backtest</div>
+                <pre class="q-ma-none">{{ JSON.stringify(backtestStratargs(overview.current_version), null, 2) }}</pre>
+              </template>
+            </q-tooltip>
+          </q-btn>
+        </div>
         <div class="text-caption text-grey-7">
-          Strategie schedulate a barra daily (overnight_ah e simili) — non coperte dal monitoraggio a feed live
+          <template v-if="overview?.registry">
+            {{ overview.registry.display_name }}
+            <q-badge :color="overview.registry.paper ? 'blue-grey' : 'deep-orange'" class="q-ml-xs">
+              {{ overview.registry.paper ? 'paper' : 'LIVE' }}
+            </q-badge>
+          </template>
+          <template v-else>Strategie schedulate a barra daily (overnight_ah e simili)</template>
         </div>
       </div>
       <div class="col-auto row q-col-gutter-sm items-center">
@@ -83,83 +101,15 @@
               <div v-if="historicalEntryIssueCount" class="text-caption text-orange-9 q-mt-sm">
                 {{ historicalEntryIssueCount }} anomalie di telemetria storiche: non cambiano l'esito dell'ultimo run.
               </div>
-            </q-card-section>
-          </q-card>
-        </div>
-
-        <!-- Chi possiede l'account -->
-        <div class="col-12 col-md-6">
-          <q-card flat bordered class="full-height">
-            <q-card-section>
-              <div class="text-subtitle2 text-grey-8">Account e proprietà</div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section>
-              <div v-if="!overview.registry" class="text-grey-6">
-                Account non registrato — nessuna assegnazione esplicita nel registro.
+              <div v-if="overview.open_guardrail_alerts?.length" class="q-mt-md">
+                <div v-for="alert in overview.open_guardrail_alerts" :key="alert.id" class="text-body2 text-negative">
+                  <q-icon name="warning" size="xs" /> {{ guardrailAlertText(alert) }}
+                </div>
               </div>
-              <template v-else>
-                <div class="text-body1">
-                  <b>{{ overview.registry.display_name }}</b>
-                  <q-badge :color="overview.registry.paper ? 'blue-grey' : 'deep-orange'" class="q-ml-sm">
-                    {{ overview.registry.paper ? 'paper' : 'LIVE' }}
-                  </q-badge>
-                </div>
-                <div class="text-body2 text-grey-8 q-mt-xs">
-                  Strategia assegnata: {{ overview.registry.assigned_strategy }}
-                </div>
-                <div v-if="!overview.open_guardrail_alerts.length" class="text-body2 text-positive q-mt-sm">
-                  <q-icon name="check_circle" size="xs" /> Nessun ordine attribuibile a un'altra strategia su questo account.
-                </div>
-                <div v-else class="q-mt-sm">
-                  <div v-for="alert in overview.open_guardrail_alerts" :key="alert.id" class="text-body2 text-negative">
-                    <q-icon name="warning" size="xs" /> {{ guardrailAlertText(alert) }}
-                  </div>
-                </div>
-              </template>
             </q-card-section>
           </q-card>
         </div>
 
-        <!-- Parametri/commit correnti -->
-        <div class="col-12 col-md-6">
-          <q-card flat bordered class="full-height">
-            <q-card-section>
-              <div class="text-subtitle2 text-grey-8">Configurazione in vigore</div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section>
-              <div v-if="!overview.current_version" class="text-grey-6">Nessuna versione registrata.</div>
-              <template v-else>
-                <div class="text-body2">
-                  In vigore dal <b>{{ formatDate(overview.current_version.effective_from_date) }}</b>
-                  <q-badge :color="overview.current_version.source === 'observed_run' ? 'positive' : 'grey-6'" class="q-ml-sm">
-                    {{ overview.current_version.source === 'observed_run' ? 'osservato' : 'ricostruito' }}
-                  </q-badge>
-                </div>
-                <div class="text-caption text-grey-7 q-mt-xs">
-                  {{ overview.timeline.length }} versione/i note dal {{ formatDate(overview.timeline[0]?.effective_from_date) }}
-                </div>
-                <q-expansion-item dense label="Vedi parametri (STRATARGS)" class="q-mt-sm">
-                  <pre class="stratargs-pre">{{ JSON.stringify(overview.current_version.stratargs, null, 2) }}</pre>
-                </q-expansion-item>
-                <q-expansion-item dense label="Vedi parametri Backtrader (replay)" class="q-mt-sm">
-                  <div class="text-caption text-grey-7 q-mb-xs">
-                    Stessa configurazione della strategia, con <code>auction: true</code> nel backtest: è la traduzione
-                    prevista per simulare correttamente close → open, non una modifica ai parametri Alpaca.
-                  </div>
-                  <pre class="stratargs-pre">{{ JSON.stringify(backtestStratargs(overview.current_version), null, 2) }}</pre>
-                </q-expansion-item>
-                <div class="text-caption text-grey-7 q-mt-sm">Annota una data anche senza cambio di versione (utile per development).</div>
-                <div class="row q-col-gutter-xs q-mt-xs items-center">
-                  <div class="col-12 col-sm-4"><q-input v-model="markerDate" type="date" dense outlined label="Data" /></div>
-                  <div class="col"><q-input v-model="markerLabel" dense outlined label="Etichetta" @keyup.enter="createChangeMarker" /></div>
-                  <div class="col-auto"><q-btn color="primary" dense label="Etichetta" :loading="markerSaving" @click="createChangeMarker" /></div>
-                </div>
-              </template>
-            </q-card-section>
-          </q-card>
-        </div>
       </div>
 
       <!-- Performance vs storia -->
@@ -573,6 +523,11 @@ export default {
     },
     pendingCount() {
       return this.overview?.pending_queue?.length || 0
+    },
+    currentParamsEqual() {
+      const version = this.overview?.current_version
+      if (!version) return true
+      return JSON.stringify(version.stratargs || {}) === JSON.stringify(this.backtestStratargs(version))
     },
     prePost() {
       const footprints = this.overview?.footprints || []
