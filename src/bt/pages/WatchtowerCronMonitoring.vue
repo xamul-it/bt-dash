@@ -114,8 +114,16 @@
                   <q-tooltip>{{ pending.detail }} · vai alla riga</q-tooltip>
                 </q-btn>
               </div>
-              <div v-if="historicalEntryIssueCount" class="text-caption text-orange-9 q-mt-sm">
-                {{ historicalEntryIssueCount }} anomalie di telemetria storiche: non cambiano l'esito dell'ultimo run.
+              <div v-if="historicalEntryIssues.length" class="q-mt-md">
+                <div class="text-caption text-orange-9">Da analizzare nello storico:</div>
+                <q-btn v-for="issue in historicalEntryIssues" :key="issue.day" flat dense no-caps
+                  :color="issue.status === 'error' ? 'negative' : 'orange-9'" :label="`${issue.label} · ${issue.kind}`"
+                  @click="goToDay(issue.day)">
+                  <q-tooltip>{{ issue.detail }} · apri la giornata</q-tooltip>
+                </q-btn>
+                <div class="text-caption text-grey-7 q-mt-xs">
+                  Sono divergenze/esiti da verificare, non errori generici di telemetria. Le più vecchie restano nello storico della tabella.
+                </div>
               </div>
               <div v-if="overview.open_guardrail_alerts?.length" class="q-mt-md">
                 <div v-for="alert in overview.open_guardrail_alerts" :key="alert.id" class="text-body2 text-negative">
@@ -540,13 +548,24 @@ export default {
       const comparisons = this.overview?.entry_comparisons || []
       return comparisons.length ? comparisons[0] : null
     },
-    historicalEntryIssueCount() {
+    historicalEntryIssues() {
       const latestDate = String(this.latestEntryComparison?.trading_date || '').slice(0, 10)
-      if (!latestDate) return 0
+      if (!latestDate) return []
       return (this.overview?.entry_comparisons || []).filter((item) => {
         const day = String(item.trading_date || '').slice(0, 10)
         return day < latestDate && ['diverged', 'error'].includes(item.status)
-      }).length
+      }).slice(0, 10).map((item) => {
+        const day = String(item.trading_date).slice(0, 10)
+        const diffs = item.diffs || []
+        const first = diffs[0] || {}
+        return {
+          day,
+          label: this.formatDate(day),
+          status: item.status,
+          kind: item.status === 'error' ? 'run fallito' : 'ingressi divergenti',
+          detail: first.error || first.category || first.kind || this.entryComparisonLabel(item),
+        }
+      })
     },
     pendingCount() {
       return this.overview?.pending_queue?.length || 0
