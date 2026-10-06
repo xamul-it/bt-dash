@@ -50,14 +50,14 @@
     <q-dialog v-model="paramsDialog">
       <q-card style="min-width: 620px; max-width: 95vw">
         <q-card-section class="row items-center q-pb-none">
-          <div class="text-h6">Parametri correnti</div>
+          <div class="text-h6">{{ paramsDialogTitle }}</div>
           <q-space />
           <q-btn icon="close" flat round dense v-close-popup />
         </q-card-section>
         <q-card-section>
           <div class="text-caption text-grey-7 q-mb-xs">Strategia</div>
-          <pre class="stratargs-pre">{{ currentParamsText }}</pre>
-          <template v-if="!currentParamsEqual">
+          <pre class="stratargs-pre">{{ dialogParamsText }}</pre>
+          <template v-if="paramsDialogBacktestVisible">
             <div class="text-caption text-grey-7 q-mb-xs">Replay Backtest</div>
             <pre class="stratargs-pre">{{ backtestParamsText }}</pre>
           </template>
@@ -463,9 +463,9 @@
               </q-item-label>
               <q-item-label caption>
                 commit codice: {{ v.core_commit ? v.core_commit.slice(0, 10) : 'non registrato' }}
-                — hash parametri:
-                <q-btn flat dense no-caps color="primary" :label="v.params_hash.slice(0, 10)" @click="copyHash(v.params_hash)">
-                  <q-tooltip>{{ v.params_hash }} · clicca per copiare</q-tooltip>
+                —
+                <q-btn flat dense no-caps color="primary" label="Parametri" @click="openParams(v)">
+                  <q-tooltip>{{ JSON.stringify(v.stratargs || {}, null, 2) }}</q-tooltip>
                 </q-btn>
               </q-item-label>
             </q-item-section>
@@ -511,6 +511,7 @@ export default {
       markerLabel: '',
       markerSaving: false,
       paramsDialog: false,
+      paramsDialogVersion: null,
     }
   },
   computed: {
@@ -558,6 +559,13 @@ export default {
     },
     backtestParamsText() {
       return JSON.stringify(this.backtestStratargs(this.overview?.current_version), null, 2)
+    },
+    dialogParamsVersion() { return this.paramsDialogVersion || this.overview?.current_version || null },
+    dialogParamsText() { return JSON.stringify(this.dialogParamsVersion?.stratargs || {}, null, 2) },
+    paramsDialogTitle() { return this.paramsDialogVersion ? 'Parametri della versione storica' : 'Parametri correnti' },
+    paramsDialogBacktestVisible() {
+      const version = this.dialogParamsVersion
+      return version && JSON.stringify(version.stratargs || {}) !== JSON.stringify(this.backtestStratargs(version))
     },
     prePost() {
       const footprints = this.overview?.footprints || []
@@ -740,18 +748,14 @@ export default {
     await this.loadProfiles()
   },
   methods: {
-    async copyHash(hash) {
-      try {
-        await navigator.clipboard.writeText(hash)
-        this.$q.notify({ color: 'positive', message: 'Hash parametri copiato' })
-      } catch (error) {
-        this.$q.notify({ color: 'negative', message: 'Copia non disponibile nel browser' })
-      }
+    openParams(version) {
+      this.paramsDialogVersion = version || null
+      this.paramsDialog = true
     },
     async copyCurrentParams() {
-      const text = this.currentParamsEqual
-        ? this.currentParamsText
-        : `Strategia:\n${this.currentParamsText}\n\nReplay Backtest:\n${this.backtestParamsText}`
+      const version = this.dialogParamsVersion
+      const same = JSON.stringify(version?.stratargs || {}) === JSON.stringify(this.backtestStratargs(version))
+      const text = same ? this.dialogParamsText : `Strategia:\n${this.dialogParamsText}\n\nReplay Backtest:\n${JSON.stringify(this.backtestStratargs(version), null, 2)}`
       try {
         await navigator.clipboard.writeText(text)
         this.$q.notify({ color: 'positive', message: 'Parametri copiati' })

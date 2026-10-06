@@ -293,9 +293,9 @@
             </div>
             <div class="col-6 col-md-6">
               <div class="text-caption text-grey-7">Params hash</div>
-              <q-btn v-if="baselineRecord.params_hash" flat dense no-caps color="primary" class="text-body2" :label="baselineRecord.params_hash"
-                @click="copyHash(baselineRecord.params_hash)">
-                <q-tooltip>{{ baselineRecord.params_hash }} · clicca per copiare</q-tooltip>
+              <q-btn v-if="baselineRecord.params" flat dense no-caps color="primary" class="text-body2" label="Parametri"
+                @click="copyParams(baselineRecord.params)">
+                <q-tooltip>{{ JSON.stringify(baselineRecord.params, null, 2) }}</q-tooltip>
               </q-btn>
               <div v-else class="text-body2">NA</div>
             </div>
@@ -612,10 +612,10 @@ export default defineComponent({
     const isComputingBaseline = ref(false)
     const baselineJobStatus = ref(null)
 
-    const copyHash = async (hash) => {
+    const copyParams = async (params) => {
       try {
-        await navigator.clipboard.writeText(hash)
-        Notify.create({ type: 'positive', message: 'Hash parametri copiato' })
+        await navigator.clipboard.writeText(JSON.stringify(params || {}, null, 2))
+        Notify.create({ type: 'positive', message: 'Parametri copiati' })
       } catch {
         Notify.create({ type: 'negative', message: 'Copia non disponibile nel browser' })
       }
@@ -1859,7 +1859,7 @@ export default defineComponent({
       baselineSourcePaths,
       isComputingBaseline,
       baselineJobStatus,
-      copyHash,
+      copyParams,
       baselineStatus,
       baselineRecord,
       baselineMatchMode,
