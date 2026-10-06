@@ -4,16 +4,12 @@
       <q-tr :props="props">
         <q-td v-for="col in props.cols" :key="col.name" :props="props">
           <template v-if="col.name === 'job_status'">
-            <q-btn v-if="!props.row.managed" color="blue" @click="editJob(props.row.id)" icon="edit" flat
-              dense><q-tooltip>Edit</q-tooltip></q-btn>
             <q-btn color="amber" v-if="props.row.enabled" @click="pauseJob(props.row.id)"
               icon="pause_circle_filled" flat dense hint="Pause"><q-tooltip>Pause</q-tooltip></q-btn>
             <q-btn color="amber" v-else @click="resumeJob(props.row.id)" icon="not_started" flat
               dense><q-tooltip>Resume</q-tooltip></q-btn>
-            <q-btn color="green" @click="runJob(props.row.id)" icon="play_circle_filled" flat
+            <q-btn color="green" @click="confirmRun(props.row.id)" icon="play_circle_filled" flat
               dense><q-tooltip>Run</q-tooltip></q-btn>
-            <q-btn v-if="!props.row.managed" color="black" @click="deleteJob(props.row.id)" icon="delete_forever" flat
-              dense><q-tooltip>Delete</q-tooltip></q-btn>
           </template>
           <template v-else-if="col.name === 'next_run_time'">
             {{ props.row.enabled ? props.row.next_run_time : 'Disabilitato' }}
@@ -32,22 +28,15 @@
       </q-tr>
     </template>
   </q-table>
-  <schedule-dialog ref="scheduleDialog" @confirm-schedule="handleSchedule" />
 </template>
 <script>
 
 import { defineComponent, ref } from 'vue'
-import axios from 'axios'
-import { constants } from 'boot/constants'
-import ScheduleDialog from 'src/bt/components/ScheduleDialog';
 
 const pagination = ref({ page: 1, rowsPerPage: 50 });
 
 export default defineComponent({
   name: 'JobTable',
-  components: {
-    ScheduleDialog
-  },
   props: {
     jobs: Array
   },
@@ -92,56 +81,22 @@ export default defineComponent({
     runJob(jobId) {
       this.$emit('run-job', jobId);
     },
-    editJob(jobId) {
-      this.$refs.scheduleDialog.scheduleDialog({ id: jobId, name: jobId, type: '' });
-    },
-
-    deleteJob(jobId) {
+    confirmRun(jobId) {
       this.$q.dialog({
-        title: 'Conferma',
-        message: 'Verrà cancellata definitivamente la schedulazione, vuoi procedere?',
+        title: 'Esegui job',
+        message: 'Avvia ora questo job Watchtower/manutenzione? Non eseguirà strategie né invierà ordini.',
         ok: {
-          label: 'Sì',
-          color: 'negative'
+          label: 'Esegui',
+          color: 'primary'
         },
         cancel: {
           label: 'No',
           color: 'primary'
         }
       }).onOk(() => {
-        this.$emit('delete-job', jobId);
-        // Esegui qui il codice per cancellare il job
-        console.log('Job eliminato:', jobId);
-      }).onCancel(() => {
-        console.log('Cancellazione annullata');
+        this.runJob(jobId);
       });
     },
-    // Gestisci i dati emessi dall'evento del componente figlio
-    async handleSchedule(scheduleData) {
-      //try { 
-        const data = JSON.stringify(scheduleData)
-        const response = await axios.post(constants.API_BASE_URL + '/dyn/sc/update_job', data, {
-          headers: {
-            'Content-Type': 'application/json'}
-          });
-        this.$emit('reload');
-        this.$q.notify({
-          color: 'positive',
-          position: 'top',
-          message: 'Schedulazione inviata con successo!',
-          icon: 'cloud_done'
-        });
-      /*} catch (error) {
-        this.$q.notify({
-          color: 'negative',
-          position: 'top',
-          message: 'Errore durante l\'invio della schedulazione.',
-          icon: 'error'
-        });
-      }*/
-    }
-
-
   }
 })
 
