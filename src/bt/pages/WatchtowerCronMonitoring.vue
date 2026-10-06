@@ -4,7 +4,7 @@
       <div class="col">
         <div class="text-h5">
           Watchtower — {{ selectedProfile || 'Profili Cron' }}
-          <span v-if="overview?.registry">· {{ overview.registry.display_name }}</span>
+          <span v-if="profileTitleLabel">· {{ profileTitleLabel }}</span>
           <q-badge v-if="overview?.registry" :color="overview.registry.paper ? 'blue-grey' : 'deep-orange'" class="q-ml-sm" vertical-align="middle">
             {{ overview.registry.paper ? 'paper' : 'LIVE' }}
           </q-badge>
@@ -516,6 +516,12 @@ export default {
         label: `${p.profile} (${p.strategy || 'strategia sconosciuta'})`,
         value: p.profile,
       }))
+    },
+    profileTitleLabel() {
+      const label = String(this.overview?.registry?.display_name || '').trim()
+      return label && label.toLowerCase() !== String(this.selectedProfile || '').trim().toLowerCase()
+        ? label
+        : ''
     },
     latestResult() {
       const results = this.overview?.reconciliation_results || []
