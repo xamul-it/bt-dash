@@ -3,26 +3,18 @@
     <div class="row items-center q-col-gutter-md q-mb-md">
       <div class="col">
         <div class="text-h5">
-          Watchtower — {{ overview?.registry?.assigned_strategy || selectedProfile || 'Profili Cron' }}
-          <q-btn v-if="overview?.current_version" flat round dense icon="info" size="sm" class="q-ml-xs">
-            <q-tooltip max-width="520px" class="bg-grey-9 text-white">
-              <div class="text-weight-medium q-mb-xs">Parametri correnti</div>
-              <pre class="q-ma-none">{{ JSON.stringify(overview.current_version.stratargs, null, 2) }}</pre>
-              <template v-if="!currentParamsEqual">
-                <div class="text-weight-medium q-mt-sm q-mb-xs">Parametri replay Backtest</div>
-                <pre class="q-ma-none">{{ JSON.stringify(backtestStratargs(overview.current_version), null, 2) }}</pre>
-              </template>
-            </q-tooltip>
-          </q-btn>
+          Watchtower — {{ selectedProfile || 'Profili Cron' }}
+          <span v-if="overview?.registry">· {{ overview.registry.display_name }}</span>
+          <q-badge v-if="overview?.registry" :color="overview.registry.paper ? 'blue-grey' : 'deep-orange'" class="q-ml-sm" vertical-align="middle">
+            {{ overview.registry.paper ? 'paper' : 'LIVE' }}
+          </q-badge>
         </div>
         <div class="text-caption text-grey-7">
-          <template v-if="overview?.registry">
-            {{ overview.registry.display_name }}
-            <q-badge :color="overview.registry.paper ? 'blue-grey' : 'deep-orange'" class="q-ml-xs">
-              {{ overview.registry.paper ? 'paper' : 'LIVE' }}
-            </q-badge>
-          </template>
+          <template v-if="overview?.registry">Strategia: {{ overview.registry.assigned_strategy }}</template>
           <template v-else>Strategie schedulate a barra daily (overnight_ah e simili)</template>
+          <q-btn v-if="overview?.current_version" flat round dense icon="info" size="sm" class="q-ml-xs" @click="paramsDialog = true">
+            <q-tooltip>Vedi e copia i parametri correnti</q-tooltip>
+          </q-btn>
         </div>
       </div>
       <div class="col-auto row q-col-gutter-sm items-center">
@@ -54,6 +46,28 @@
     <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md" rounded>
       {{ loadError }}
     </q-banner>
+
+    <q-dialog v-model="paramsDialog">
+      <q-card style="min-width: 620px; max-width: 95vw">
+        <q-card-section class="row items-center q-pb-none">
+          <div class="text-h6">Parametri correnti</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <div class="text-caption text-grey-7 q-mb-xs">Strategia</div>
+          <pre class="stratargs-pre">{{ currentParamsText }}</pre>
+          <template v-if="!currentParamsEqual">
+            <div class="text-caption text-grey-7 q-mb-xs">Replay Backtest</div>
+            <pre class="stratargs-pre">{{ backtestParamsText }}</pre>
+          </template>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat icon="content_copy" label="Copia" color="primary" @click="copyCurrentParams" />
+          <q-btn flat label="Chiudi" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <div v-if="!selectedProfile && !loading" class="text-grey-6 q-pa-lg text-center">
       Nessun profilo trovato nel registro. I profili appaiono qui appena hanno almeno un dato in una delle Fasi D/A/C/B.
@@ -493,6 +507,7 @@ export default {
       markerDate: new Date().toISOString().slice(0, 10),
       markerLabel: '',
       markerSaving: false,
+      paramsDialog: false,
     }
   },
   computed: {
@@ -528,6 +543,12 @@ export default {
       const version = this.overview?.current_version
       if (!version) return true
       return JSON.stringify(version.stratargs || {}) === JSON.stringify(this.backtestStratargs(version))
+    },
+    currentParamsText() {
+      return JSON.stringify(this.overview?.current_version?.stratargs || {}, null, 2)
+    },
+    backtestParamsText() {
+      return JSON.stringify(this.backtestStratargs(this.overview?.current_version), null, 2)
     },
     prePost() {
       const footprints = this.overview?.footprints || []
@@ -710,6 +731,17 @@ export default {
     await this.loadProfiles()
   },
   methods: {
+    async copyCurrentParams() {
+      const text = this.currentParamsEqual
+        ? this.currentParamsText
+        : `Strategia:\n${this.currentParamsText}\n\nReplay Backtest:\n${this.backtestParamsText}`
+      try {
+        await navigator.clipboard.writeText(text)
+        this.$q.notify({ color: 'positive', message: 'Parametri copiati' })
+      } catch (error) {
+        this.$q.notify({ color: 'negative', message: 'Copia non disponibile nel browser' })
+      }
+    },
     settlementLabel(settlements) {
       if (!settlements?.length) return 'chiusura pending'
       const pending = settlements.filter((s) => s.status === 'pending').length
