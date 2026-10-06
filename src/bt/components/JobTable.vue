@@ -17,6 +17,12 @@
           <template v-else-if="col.name === 'enabled'">
             <q-badge :color="props.row.enabled ? 'positive' : 'grey'">{{ props.row.enabled ? 'Abilitato' : 'Disabilitato' }}</q-badge>
           </template>
+          <template v-else-if="col.name === 'last_finished_at'">
+            {{ props.row.last_finished_at || '—' }}
+          </template>
+          <template v-else-if="col.name === 'last_error'">
+            <span :class="props.row.last_error ? 'text-negative' : 'text-grey-6'">{{ props.row.last_error || '—' }}</span>
+          </template>
           <template v-else>
             <q-tooltip>
               {{ props.row[col.field] }}
@@ -50,6 +56,8 @@ export default defineComponent({
         { name: 'trigger', align: 'left', label: 'Trigger', field: 'trigger' },
         { name: 'status', align: 'left', label: 'Ultimo esito', field: 'status' },
         { name: 'enabled', align: 'left', label: 'Stato', field: 'enabled' },
+        { name: 'last_finished_at', align: 'left', label: 'Ultimo completamento', field: 'last_finished_at' },
+        { name: 'last_error', align: 'left', label: 'Ultimo errore', field: 'last_error' },
         { name: 'job_status', label: 'Status', field: row => row.enabled ? 'Abilitato' : 'Disabilitato', sortable: false },
       ]
     };
