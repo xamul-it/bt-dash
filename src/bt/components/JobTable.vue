@@ -25,6 +25,10 @@
           <template v-else-if="col.name === 'last_error'">
             <span :class="props.row.last_error ? 'text-negative' : 'text-grey-6'">{{ props.row.last_error || '—' }}</span>
           </template>
+          <template v-else-if="col.name === 'last_output'">
+            <q-btn v-if="props.row.last_output" flat dense no-caps color="primary" label="Vedi output" @click="openOutput(props.row)" />
+            <span v-else class="text-grey-6">—</span>
+          </template>
           <template v-else>
             <q-tooltip>
               {{ props.row[col.field] }}
@@ -36,6 +40,12 @@
       </q-tr>
     </template>
   </q-table>
+  <q-dialog v-model="outputDialog">
+    <q-card style="min-width: 680px; max-width: 95vw">
+      <q-card-section class="row items-center q-pb-none"><div class="text-h6">Output — {{ outputJobId }}</div><q-space /><q-btn flat round dense icon="close" v-close-popup /></q-card-section>
+      <q-card-section><pre class="output-pre">{{ outputText }}</pre></q-card-section>
+    </q-card>
+  </q-dialog>
 </template>
 <script>
 
@@ -60,8 +70,12 @@ export default defineComponent({
         { name: 'enabled', align: 'left', label: 'Stato', field: 'enabled' },
         { name: 'last_finished_at', align: 'left', label: 'Ultimo completamento', field: 'last_finished_at' },
         { name: 'last_error', align: 'left', label: 'Ultimo errore', field: 'last_error' },
+        { name: 'last_output', align: 'left', label: 'Output', field: 'last_output' },
         { name: 'job_status', label: 'Azioni', field: row => row.enabled ? 'Abilitato' : 'Disabilitato', sortable: false },
-      ]
+      ],
+      outputDialog: false,
+      outputJobId: '',
+      outputText: ''
     };
   },
   // Aggiungi la paginazione con 50 righe per pagina come default
@@ -106,6 +120,11 @@ export default defineComponent({
       }).onOk(() => {
         this.runJob(jobId);
       });
+    },
+    openOutput(job) {
+      this.outputJobId = job.id;
+      this.outputText = job.last_output;
+      this.outputDialog = true;
     },
   }
 })

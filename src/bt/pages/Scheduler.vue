@@ -35,7 +35,8 @@ export default defineComponent({
   data() {
     return {
       jobs: [],
-      schedulerStatus: 'stopped'  // Assumed default
+      schedulerStatus: 'stopped',  // Assumed default
+      refreshTimer: null,
     };
   },
   methods: {
@@ -101,6 +102,13 @@ export default defineComponent({
   mounted() {
     this.fetchSchedulerStatus();
     this.fetchJobs();
+    this.refreshTimer = window.setInterval(() => {
+      this.fetchSchedulerStatus();
+      this.fetchJobs();
+    }, 3000);
+  },
+  beforeUnmount() {
+    window.clearInterval(this.refreshTimer);
   }
 })
 </script>
