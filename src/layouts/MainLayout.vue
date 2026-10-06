@@ -15,6 +15,9 @@
         </q-toolbar-title>
         <q-space/>
         <div class="q-gutter-sm row items-center no-wrap">
+          <q-chip dense square :color="schedulerRunning ? 'positive' : 'negative'" text-color="white" icon="schedule">
+            Scheduler {{ schedulerRunning ? 'attivo' : 'fermo' }}
+          </q-chip>
           <install-pwa-button />
           <q-btn round dense flat color="white" icon="logout" aria-label="Esci" @click="logout">
             <q-tooltip>Esci</q-tooltip>
@@ -270,10 +273,21 @@ export default defineComponent({
         && currentPath.value !== '/Watchtower/CronMonitoring'
     )
 
+    const schedulerRunning = ref(false)
+    const refreshSchedulerStatus = async () => {
+      try {
+        const { data } = await api.get('/dyn/sc/status')
+        schedulerRunning.value = data?.status === 'running'
+      } catch (_) {
+        schedulerRunning.value = false
+      }
+    }
+    refreshSchedulerStatus()
     return {
       isScheduledRoute,
       isIntradayRoute,
       leftDrawerOpen,
+      schedulerRunning,
       toggleLeftDrawer () {
         leftDrawerOpen.value = !leftDrawerOpen.value
       }

@@ -4,7 +4,7 @@
       <q-tr :props="props">
         <q-td v-for="col in props.cols" :key="col.name" :props="props">
           <template v-if="col.name === 'job_status'">
-            <q-btn color="blue" @click="editJob(props.row.id)" icon="edit" flat
+            <q-btn v-if="!props.row.managed" color="blue" @click="editJob(props.row.id)" icon="edit" flat
               dense><q-tooltip>Edit</q-tooltip></q-btn>
             <q-btn color="amber" v-if="props.row.enabled" @click="pauseJob(props.row.id)"
               icon="pause_circle_filled" flat dense hint="Pause"><q-tooltip>Pause</q-tooltip></q-btn>
@@ -12,11 +12,14 @@
               dense><q-tooltip>Resume</q-tooltip></q-btn>
             <q-btn color="green" @click="runJob(props.row.id)" icon="play_circle_filled" flat
               dense><q-tooltip>Run</q-tooltip></q-btn>
-            <q-btn color="black" @click="deleteJob(props.row.id)" icon="delete_forever" flat
+            <q-btn v-if="!props.row.managed" color="black" @click="deleteJob(props.row.id)" icon="delete_forever" flat
               dense><q-tooltip>Delete</q-tooltip></q-btn>
           </template>
           <template v-else-if="col.name === 'next_run_time'">
             {{ props.row.enabled ? props.row.next_run_time : 'Disabilitato' }}
+          </template>
+          <template v-else-if="col.name === 'enabled'">
+            <q-badge :color="props.row.enabled ? 'positive' : 'grey'">{{ props.row.enabled ? 'Abilitato' : 'Disabilitato' }}</q-badge>
           </template>
           <template v-else>
             <q-tooltip>
@@ -56,7 +59,8 @@ export default defineComponent({
         { name: 'function', align: 'left', label: 'Function', field: 'function' },
         { name: 'args', align: 'left', label: 'Arguments', field: 'args' },
         { name: 'trigger', align: 'left', label: 'Trigger', field: 'trigger' },
-        { name: 'status', align: 'left', label: 'Trigger', field: 'status' },
+        { name: 'status', align: 'left', label: 'Ultimo esito', field: 'status' },
+        { name: 'enabled', align: 'left', label: 'Stato', field: 'enabled' },
         { name: 'job_status', label: 'Status', field: row => row.enabled ? 'Abilitato' : 'Disabilitato', sortable: false },
       ]
     };
