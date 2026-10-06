@@ -137,7 +137,7 @@
       </div>
 
       <!-- Performance vs storia -->
-      <q-card id="reconciliation-table" flat bordered class="q-mb-md">
+      <q-card flat bordered class="q-mb-md">
         <q-card-section>
           <div class="text-subtitle2 text-grey-8">La strategia performa come in passato?</div>
         </q-card-section>
@@ -224,9 +224,12 @@
       </q-card>
 
       <!-- Storico riconciliazioni -->
-      <q-card flat bordered class="q-mb-md">
+      <q-card id="reconciliation-table" flat bordered class="q-mb-md">
         <q-card-section>
-          <div class="text-subtitle2 text-grey-8">Riconciliazione giornaliera — ultimi giorni</div>
+          <div class="row items-center q-col-gutter-sm">
+            <div class="col text-subtitle2 text-grey-8">Riconciliazione giornaliera</div>
+            <div class="col-auto"><q-select v-model="historyDays" dense outlined emit-value map-options :options="historyDayOptions" label="Mostra ultimi" style="min-width: 160px" /></div>
+          </div>
         </q-card-section>
         <q-separator />
         <q-table
@@ -522,6 +525,8 @@ export default {
       markerSaving: false,
       paramsDialog: false,
       paramsDialogVersion: null,
+      historyDays: 20,
+      historyDayOptions: [5, 10, 20, 30, 60].map(value => ({ value, label: `${value} giorni` })),
     }
   },
   computed: {
@@ -568,10 +573,11 @@ export default {
       })
     },
     pendingCount() {
-      return this.overview?.pending_queue?.length || 0
+      return this.pendingDates.length
     },
     pendingDates() {
-      return (this.overview?.pending_queue || []).map((pending) => {
+      const today = new Date().toISOString().slice(0, 10)
+      return (this.overview?.pending_queue || []).filter((pending) => String(pending.trading_date).slice(0, 10) < today).map((pending) => {
         const day = String(pending.trading_date).slice(0, 10)
         return {
           day,
@@ -725,8 +731,12 @@ export default {
         detail: p.reason === 'open_day' ? 'giorno ancora aperto / non settled' : 'in attesa di elaborazione',
         raw: null,
       }))
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() - this.historyDays + 1)
+      const cutoffDay = cutoff.toISOString().slice(0, 10)
       return [...pendingRows, ...rows]
         .sort((a, b) => b.sortDate.localeCompare(a.sortDate))
+        .filter((row) => row.sortDate >= cutoffDay)
     },
     statusHeadline() {
       if (!this.overview) return ''
