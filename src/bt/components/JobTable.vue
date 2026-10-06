@@ -10,8 +10,8 @@
               dense><q-tooltip>Resume</q-tooltip></q-btn>
             <q-btn color="green" @click="confirmRun(props.row.id)" icon="play_circle_filled" flat
               dense><q-tooltip>Run</q-tooltip></q-btn>
-            <q-btn v-if="props.row.editable" color="primary" @click="$emit('edit-job', props.row)" icon="edit" flat
-              dense><q-tooltip>Modifica orario</q-tooltip></q-btn>
+            <q-btn v-if="props.row.editable" color="primary" @click="$emit('edit-job', props.row)" icon="edit"
+              label="Modifica" flat dense><q-tooltip>Modifica frequenza e orario</q-tooltip></q-btn>
           </template>
           <template v-else-if="col.name === 'next_run_time'">
             {{ props.row.enabled ? props.row.next_run_time : 'Disabilitato' }}
@@ -60,7 +60,7 @@ export default defineComponent({
         { name: 'enabled', align: 'left', label: 'Stato', field: 'enabled' },
         { name: 'last_finished_at', align: 'left', label: 'Ultimo completamento', field: 'last_finished_at' },
         { name: 'last_error', align: 'left', label: 'Ultimo errore', field: 'last_error' },
-        { name: 'job_status', label: 'Status', field: row => row.enabled ? 'Abilitato' : 'Disabilitato', sortable: false },
+        { name: 'job_status', label: 'Azioni', field: row => row.enabled ? 'Abilitato' : 'Disabilitato', sortable: false },
       ]
     };
   },
