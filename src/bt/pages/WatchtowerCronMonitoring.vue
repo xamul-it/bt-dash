@@ -167,13 +167,19 @@
                   <tr><td>Win rate</td><td>{{ pct(selectedBaseline?.metrics?.win_rate) }}</td><td v-for="window in comparisonWindows" :key="`win-${window.days}`">{{ pct(window.comparison?.recent?.metrics?.win_rate) }}</td></tr>
                   <tr><td>Gain medio/trade</td><td>{{ pctSigned(selectedBaseline?.metrics?.mean) }}</td><td v-for="window in comparisonWindows" :key="`trade-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.mean) }}</td></tr>
                   <tr><td>Gain medio/giorno</td><td>{{ pctSigned(selectedBaseline?.metrics?.average_daily_return_pct) }}</td><td v-for="window in comparisonWindows" :key="`day-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.average_daily_return_pct) }}</td></tr>
-                  <tr><td>Compatibilità statistica</td><td>—</td><td v-for="window in comparisonWindows" :key="`compatibility-${window.days}`">{{ compatibilityLabel(window.comparison) }}</td></tr>
+                  <tr><td>Compatibilità statistica</td><td>—</td><td v-for="window in comparisonWindows" :key="`compatibility-${window.days}`">
+                    <span :class="compatibilityColor(window.comparison)">{{ compatibilityLabel(window.comparison) }}
+                      <q-tooltip>{{ compatibilityDirectionText(window.comparison) }}</q-tooltip>
+                    </span>
+                  </td></tr>
                 </tbody>
               </table>
             </div>
             <div class="text-caption text-grey-7 q-mt-sm">
               Compatibilità: test bilaterale del gain medio/trade della finestra rispetto a media e dispersione della baseline.
               Valore alto = il campione è statisticamente coerente con la baseline.
+              Colore del gain medio rispetto alla baseline: verde sopra +0,01 punti percentuali,
+              rosso sotto −0,01, grigio nella fascia ±0,01.
               Le date seguono sempre il calendario di trading; eventuali giorni senza replay restano fuori dal campione.
             </div>
           </template>
@@ -211,7 +217,11 @@
                   <tr><td>Win rate</td><td>{{ pct(selectedBaseline?.metrics?.win_rate) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-win-${window.days}`">{{ pct(window.comparison?.recent?.metrics?.win_rate) }}</td></tr>
                   <tr><td>Gain medio/trade</td><td>{{ pctSigned(selectedBaseline?.metrics?.mean) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-trade-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.mean) }}</td></tr>
                   <tr><td>Gain medio/giorno</td><td>{{ pctSigned(selectedBaseline?.metrics?.average_daily_return_pct) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-day-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.average_daily_return_pct) }}</td></tr>
-                  <tr><td>Compatibilità statistica</td><td>—</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-compatibility-${window.days}`">{{ compatibilityLabel(window.comparison) }}</td></tr>
+                  <tr><td>Compatibilità statistica</td><td>—</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-compatibility-${window.days}`">
+                    <span :class="compatibilityColor(window.comparison)">{{ compatibilityLabel(window.comparison) }}
+                      <q-tooltip>{{ compatibilityDirectionText(window.comparison) }}</q-tooltip>
+                    </span>
+                  </td></tr>
                 </tbody>
               </table>
             </div>
@@ -1119,7 +1129,28 @@ export default {
       const v = Number(value)
       return `${v >= 0 ? '+' : ''}${v.toFixed(3)}%`
     },
+    compatibilityDelta(comparison) {
+      const baseline = this.selectedBaseline?.metrics?.mean
+      const recent = comparison?.recent?.metrics?.mean
+      if (baseline === null || baseline === undefined || recent === null || recent === undefined) return null
+      const delta = Number(recent) - Number(baseline)
+      return Number.isFinite(delta) ? delta : null
+    },
+    compatibilityColor(comparison) {
+      const delta = this.compatibilityDelta(comparison)
+      // Tolerance keeps the inclusive ±0.01 boundary stable under float subtraction.
+      if (delta === null || Math.abs(delta) <= 0.01 + 1e-12) return 'text-grey-7'
+      return delta > 0 ? 'text-positive' : 'text-negative'
+    },
+    compatibilityDirectionText(comparison) {
+      const delta = this.compatibilityDelta(comparison)
+      if (delta === null) return 'Dati insufficienti per confrontare il gain medio con la baseline.'
+      const direction = Math.abs(delta) <= 0.01 + 1e-12
+        ? 'nella fascia neutra' : (delta > 0 ? 'superiore alla baseline' : 'inferiore alla baseline')
+      return `Gain medio/trade ${direction}: scarto ${delta >= 0 ? '+' : ''}${delta.toFixed(6)} punti percentuali. Fascia neutra: ±0,01 punti percentuali. Il colore indica la direzione del gain; la percentuale indica la compatibilità statistica.`
+    },
     compatibilityLabel(comparison) {
+      if (this.compatibilityDelta(comparison) === null) return '—'
       const baselineMean = Number(this.selectedBaseline?.metrics?.mean)
       const baselineStddev = Number(this.selectedBaseline?.metrics?.stddev)
       const recentMean = Number(comparison?.recent?.metrics?.mean)
