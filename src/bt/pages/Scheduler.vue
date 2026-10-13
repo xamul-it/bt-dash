@@ -16,7 +16,7 @@
       </div>
       <job-table :jobs="jobs" @pause-job="pauseJob" @resume-job="resumeJob" @run-job="runJob"
         @edit-job="openDialog"></job-table>
-      <schedule-dialog ref="scheduleDialog" @save="updateJob" />
+      <schedule-dialog ref="scheduleDialog" :jobs="jobs" @save="updateJob" />
     </q-page>
   </div>
 </template>

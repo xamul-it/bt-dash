@@ -7,6 +7,9 @@
       </q-card-section>
       <q-card-section>
         <q-form ref="scheduleForm" @submit="submit">
+          <q-select v-model="afterJob" :options="predecessors" emit-value map-options clearable filled
+            label="Esegui dopo il successo di (opzionale)" class="q-mb-sm" />
+          <div v-if="afterJob" class="text-caption q-mb-sm">L'orario autonomo è sospeso. Il job parte solo dopo il successo del predecessore; resta possibile eseguirlo manualmente.</div>
           <q-select v-model="schedule.frequency" :options="frequencies" emit-value map-options filled label="Frequenza"
             :rules="[value => !!value || 'Frequenza obbligatoria']" />
           <div class="row q-col-gutter-sm q-mt-xs">
@@ -30,10 +33,12 @@
 <script>
 export default {
   emits: ['save'],
+  props: { jobs: { type: Array, default: () => [] } },
   data () {
     return {
       dialog: false,
       jobId: '',
+      afterJob: null,
       schedule: { frequency: 'daily', hour: 0, minute: 0, day_of_week: 'mon' },
       frequencies: [
         { label: 'Ogni ora', value: 'hourly' },
@@ -43,10 +48,17 @@ export default {
       weekdays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(value => ({ value, label: value }))
     }
   },
+  computed: {
+    predecessors () {
+      return this.jobs.filter(job => job.editable && job.id !== this.jobId && !job.id.endsWith('_immediate'))
+        .map(job => ({ value: job.id, label: job.id }))
+    }
+  },
   methods: {
     open (job) {
       const current = job.schedule || {}
       this.jobId = job.id
+      this.afterJob = job.after_job || null
       this.schedule = {
         frequency: current.frequency || (job.id === 'Controllo drift baseline profili' ? 'hourly' : 'daily'),
         hour: Number.isInteger(current.hour) ? current.hour : 0,
@@ -60,7 +72,7 @@ export default {
         if (!valid) return
         const schedule = { ...this.schedule }
         if (schedule.frequency !== 'weekly') delete schedule.day_of_week
-        this.$emit('save', { id: this.jobId, schedule })
+        this.$emit('save', { id: this.jobId, schedule, after_job: this.afterJob })
         this.dialog = false
       })
     }

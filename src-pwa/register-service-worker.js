@@ -1,5 +1,17 @@
 import { register } from 'register-service-worker'
 
+// A new worker otherwise leaves an already-open dashboard running old JS.
+if ('serviceWorker' in navigator) {
+  const hadController = Boolean(navigator.serviceWorker.controller)
+  let refreshing = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !refreshing) {
+      refreshing = true
+      window.location.reload()
+    }
+  })
+}
+
 // The ready(), registered(), cached(), updatefound() and updated()
 // events passes a ServiceWorkerRegistration instance in their arguments.
 // ServiceWorkerRegistration: https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration

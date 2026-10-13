@@ -14,7 +14,7 @@
               label="Modifica" flat dense><q-tooltip>Modifica frequenza e orario</q-tooltip></q-btn>
           </template>
           <template v-else-if="col.name === 'next_run_time'">
-            {{ props.row.enabled ? props.row.next_run_time : 'Disabilitato' }}
+            {{ !props.row.enabled ? 'Disabilitato' : (props.row.after_job ? `Dopo ${props.row.after_job}` : props.row.next_run_time) }}
           </template>
           <template v-else-if="col.name === 'enabled'">
             <q-badge :color="props.row.enabled ? 'positive' : 'grey'">{{ props.row.enabled ? 'Abilitato' : 'Disabilitato' }}</q-badge>

@@ -269,17 +269,16 @@
                 <q-badge :color="props.row.badgeColor">{{ props.row.statusLabel }}</q-badge>
               </q-td>
               <q-td key="day_return" :props="props">
-                <div v-if="props.row.raw" class="day-return">
+                <div class="day-return">
                   <span class="day-return__tag">BT</span>
-                  <span class="day-return__val" :class="pctClass(daySummary(props.row.raw).bt_day_return_pct)">
-                    {{ fmtDayRet(daySummary(props.row.raw).bt_day_return_pct) }}
+                  <span class="day-return__val" :class="pctClass(originalDayReturn(props.row.settlements?.backtest))">
+                    {{ fmtDayRet(originalDayReturn(props.row.settlements?.backtest)) }}
                   </span>
                   <span class="day-return__tag">Alpaca</span>
-                  <span class="day-return__val" :class="pctClass(daySummary(props.row.raw).live_day_return_pct)">
-                    {{ fmtDayRet(daySummary(props.row.raw).live_day_return_pct) }}
+                  <span class="day-return__val" :class="pctClass(originalDayReturn(props.row.settlements?.alpaca))">
+                    {{ fmtDayRet(originalDayReturn(props.row.settlements?.alpaca)) }}
                   </span>
                 </div>
-                <span v-else class="text-grey-5">—</span>
               </q-td>
               <q-td key="detail" :props="props">{{ props.row.detail }}</q-td>
             </q-tr>
@@ -287,7 +286,7 @@
             <q-tr v-if="isExpandable(props.row) && expandedDays.includes(props.row.key)" :props="props" no-hover>
               <q-td colspan="100%" class="bg-grey-1">
                 <div class="q-pa-sm">
-                  <template v-if="props.row.raw && props.row.raw.status !== 'error'">
+                  <template v-if="props.row.raw && !props.row.verification && props.row.raw.status !== 'error'">
                     <ul class="q-my-xs q-pl-md">
                       <li
                         v-for="(line, i) in dayReading(props.row.raw)"
@@ -313,7 +312,7 @@
                         </div>
                         <div v-if="!props.row.decisions?.[source]" class="text-grey-6 text-caption">Nessuna ricevuta del run.</div>
                         <template v-else>
-                          <div v-if="props.row.decisions[source].error" class="text-negative text-caption">{{ props.row.decisions[source].error }}</div>
+                          <div v-if="props.row.decisions[source].error" class="text-negative text-caption">{{ decisionErrorText(props.row.decisions[source]) }}</div>
                           <div v-if="!(props.row.decisions[source].orders || []).length" class="text-caption text-grey-7">
                             Nessun ordine. {{ decisionReasons(props.row.decisions[source]) }}
                           </div>
@@ -322,8 +321,8 @@
                                 <q-item-section>
                                   <q-item-label>
                                     {{ orderText(order, source, props.row.settlements?.[source]) }}
-                                    <q-icon v-if="orderBrokerDetail(order, source)" name="info_outline" size="15px" class="cursor-help q-ml-xs">
-                                      <q-tooltip max-width="520px">{{ orderBrokerDetail(order, source) }}</q-tooltip>
+                                    <q-icon v-if="orderBrokerDetail(order, source, props.row.settlements?.[source])" name="info_outline" size="15px" class="cursor-help q-ml-xs">
+                                      <q-tooltip max-width="520px">{{ orderBrokerDetail(order, source, props.row.settlements?.[source]) }}</q-tooltip>
                                     </q-icon>
                                   </q-item-label>
                                   <q-item-label
@@ -331,7 +330,7 @@
                                     caption
                                     :class="pctClass(backtestOrderSettlement(order, props.row.settlements?.backtest).pnl_pct)"
                                   >
-                                    {{ backtestOrderSettlementText(order, props.row.settlements?.backtest) }}
+                                    {{ backtestOrderSettlementText(order, props.row.settlements?.backtest, props.row.verification) }}
                                   </q-item-label>
                                   <q-item-label
                                     v-if="source === 'alpaca' && alpacaOrderSettlement(order, props.row.settlements?.alpaca)"
@@ -370,7 +369,22 @@
                     </q-expansion-item>
                   </template>
 
-                  <template v-if="props.row.raw">
+                  <div v-if="props.row.verification" class="q-mt-md">
+                    <div class="text-subtitle2">Verifiche replay Backtest — separate dalle decisioni originali</div>
+                    <div v-if="props.row.verification.status === 'failed'" class="text-negative">
+                      Replay fallito: {{ props.row.verification.error || 'dettaglio non disponibile' }}
+                    </div>
+                    <template v-else>
+                      <div v-for="check in props.row.verification.evidence?.checks || []" :key="check.symbol" class="text-caption q-mt-xs">
+                        {{ replayCheckText(check) }}
+                      </div>
+                      <div v-if="!(props.row.verification.evidence?.checks || []).length" class="text-caption">
+                        {{ replayVerificationText(props.row.verification) }}
+                      </div>
+                    </template>
+                  </div>
+
+                  <template v-if="props.row.raw && !props.row.verification">
                   <div class="text-caption text-grey-8 q-mb-xs">
                     Replay su commit <code>{{ (props.row.raw.core_commit || '—').slice(0, 10) }}</code>
                     <q-badge
@@ -397,47 +411,14 @@
                     <pre class="stratargs-pre">{{ JSON.stringify(backtestStratargs(replayParamsVersion(props.row.raw)), null, 2) }}</pre>
                   </q-expansion-item>
 
-                  <div v-if="props.row.raw.status === 'error'" class="text-negative">
+                  <div v-if="replayFailed(props.row.raw)" class="text-negative">
                     Replay del backtest fallito: {{ props.row.raw.error || 'errore sconosciuto' }}
                   </div>
 
                   <template v-else>
-                    <div class="sym-cards q-mt-sm">
-                      <div
-                        v-for="card in symbolCards(props.row.raw)"
-                        :key="card.symbol + ':' + card.category"
-                        class="sym-card"
-                        :class="card.cls"
-                      >
-                        <div class="sym-card__head">
-                          <span class="sym-card__symbol">{{ card.symbol }}</span>
-                          <span class="sym-card__cat">{{ card.categoryLabel }}</span>
-                        </div>
-                        <div class="sym-grid">
-                          <span class="sym-grid__corner"></span>
-                          <span class="sym-grid__col">INGRESSO</span>
-                          <span class="sym-grid__col">USCITA</span>
-                          <span class="sym-grid__col">GUAD.</span>
-
-                          <span class="sym-grid__row">Backtest</span>
-                          <span>{{ card.btEntry }}</span>
-                          <span>{{ card.btExit }}</span>
-                          <span :class="pctClass(card.btPctRaw)">{{ card.btPct || '—' }}</span>
-
-                          <span class="sym-grid__row">Alpaca</span>
-                          <span>{{ executionText(card.liveEntry, card.liveEntryCodes) }}</span>
-                          <span :class="{ 'text-negative text-weight-medium': card.exitBad, 'text-grey-5': card.exitStale }">{{ executionText(card.liveExit, card.liveExitCodes) }}</span>
-                          <span :class="pctClass(card.livePctRaw)">{{ card.livePct || '—' }}</span>
-                        </div>
-                        <div v-if="card.footer" class="sym-card__foot">{{ card.footer }}</div>
-                      </div>
-                    </div>
-
                     <div class="text-caption text-grey-6 q-mt-sm">
-                      "Guad." = rendimento del round-trip (uscita vs ingresso). Prezzo di uscita backtest ricavato da pnl/size.
-                      "Due strategie diverse" / contaminazione account → riquadro "Account e proprietà" sopra (guardrail).
+                      Risultato storico non migrato: nessun prezzo operativo viene ricavato da questo confronto.
                     </div>
-                    <div class="text-caption text-grey-6">Legenda Alpaca: <b>c</b> asta di chiusura (CLS), <b>o</b> asta di apertura (OPG), <b>m</b> mercato, <b>f</b> fallback dopo asta non eseguita.</div>
                     <div v-if="props.row.raw.replay_outpath" class="text-caption text-grey-6">
                       Output replay: <code>{{ props.row.raw.replay_outpath }}</code>
                     </div>
@@ -698,6 +679,16 @@ export default {
         if (!item.alpacaActivity) item.alpacaActivity = []
         item.alpacaActivity.push(order)
       })
+      ;(this.overview?.replay_verifications || []).forEach((verification) => {
+        const day = String(verification.trading_date).slice(0, 10)
+        if (!byDate.has(day)) byDate.set(day, { result: null, decisions: {}, settlements: {} })
+        const item = byDate.get(day)
+        const original = item.decisions.backtest
+        const missingOriginal = original?.run_status === 'failed' && String(original.error || '').includes('watchdog deadline')
+        item.verification = missingOriginal
+          ? { ...verification, evidence: { ...verification.evidence, original_history_missing: true } }
+          : verification
+      })
       const rows = [...byDate.entries()].map(([day, item]) => ({
         key: `day-${day}`,
         sortDate: day,
@@ -708,17 +699,17 @@ export default {
         badgeColor: this.brokerActivityOverridesWatchdog(item)
           ? 'dark'
           : (item.comparison ? this.entryComparisonColor(item.comparison) : (item.result ? this.rowBadgeColor(item.result) : this.entryStatusColor(item.decisions))),
-        detail: [
-          this.brokerActivityOverridesWatchdog(item) ? this.brokerTelemetryDetail(item) : '',
+        detail: this.brokerActivityOverridesWatchdog(item) ? this.brokerTelemetryDetail(item) : [
           this.entryHeadline(item.decisions, item.settlements),
           this.alpacaActivityHeadline(item.alpacaActivity),
-          this.resultHeadline(item.result),
+          item.verification ? this.replayVerificationStatus(item.verification) : '',
         ].filter(Boolean).join(' · '),
         change: item.result?.change || this.automaticChangesByDate[day] || null,
         raw: item.result,
         decisions: item.decisions,
         settlements: item.settlements,
         alpacaActivity: item.alpacaActivity || [],
+        verification: item.verification || null,
       }))
       const pendingRows = (this.overview?.pending_queue || [])
         .filter((p) => !byDate.has(String(p.trading_date).slice(0, 10)))
@@ -814,12 +805,22 @@ export default {
       if (pending) parts.push(`${pending} chiusura/e pending`)
       if (closed.length) {
         const pnl = closed.reduce((sum, s) => sum + Number(s.pnl || 0), 0)
-        parts.push(`${closed.length} chiusa/e · gain ${pnl > 0 ? '+' : ''}${pnl.toFixed(2)}`)
+        const complete = closed.every(s => s.entry_price != null && s.pnl != null)
+        parts.push(`${closed.length} chiusa/e · ${complete ? `gain ${pnl > 0 ? '+' : ''}${pnl.toFixed(2)}` : 'P&L non disponibile'}`)
       }
       return parts.join(' · ') || 'chiusura non comunicata'
     },
+    originalDayReturn(settlements) {
+      const executed = (settlements || []).filter(s => !(s.source === 'alpaca'
+        && s.detail?.pending_reason === 'entry_not_filled' && Number(s.detail?.entry_filled_qty) === 0))
+      if (!executed.length || executed.some(s => s.status !== 'closed' || s.entry_price == null || s.pnl == null)) return null
+      const capital = executed.reduce((sum, s) => sum + Number(s.entry_price) * Number(s.qty), 0)
+      const pnl = executed.reduce((sum, s) => sum + Number(s.pnl), 0)
+      return Number.isFinite(capital) && capital > 0 && Number.isFinite(pnl) ? pnl / capital * 100 : null
+    },
     entryDecisionLabel(decision, settlements) {
-      if (!decision) return 'run non eseguito'
+      if (!decision) return 'ricevuta originale non disponibile'
+      if (String(decision.error || '').includes('watchdog deadline')) return 'ricevuta mancante'
       if (decision.run_status === 'running') return 'in esecuzione'
       if (decision.run_status === 'failed') return `errore run: ${decision.error || 'errore sconosciuto'}`
       if (!decision.outcome) return 'strategia eseguita · causale non comunicata'
@@ -864,19 +865,19 @@ export default {
         .map(([source]) => source === 'backtest' ? 'Backtest' : 'Alpaca')
     },
     brokerTelemetryLabel(item) {
-      const missing = this.watchdogMissingSources(item)
-      return `telemetria incompleta${missing.length ? `: ${missing.join(' / ')} non tracciato` : ''}`
+      return 'ricevute mancanti'
     },
     brokerTelemetryDetail(item) {
       const orders = item?.alpacaActivity?.length || 0
       const missing = this.watchdogMissingSources(item)
-      return `Broker: ${orders} ordine/i rilevato/i; ricevuta Watchtower assente per ${missing.join(' / ') || 'il run'}. Confronto Backtest/Alpaca non affidabile.`
+      return `Ricevute mancanti: ${missing.join(' / ') || 'il run'} · ${orders} ordini Alpaca rilevati`
     },
     isExpandable(row) {
-      return Boolean(row?.raw || Object.keys(row?.decisions || {}).length || Object.keys(row?.settlements || {}).length || row?.alpacaActivity?.length)
+      return Boolean(row?.raw || row?.verification || Object.keys(row?.decisions || {}).length || Object.keys(row?.settlements || {}).length || row?.alpacaActivity?.length)
     },
     decisionState(decision) {
       if (!decision) return 'non ricevuto'
+      if (String(decision.error || '').includes('watchdog deadline')) return 'ricevuta mancante'
       if (decision.run_status === 'failed') return 'errore'
       if (decision.run_status === 'running') return 'in esecuzione'
       if (decision.outcome === 'no_orders') return 'nessun ordine'
@@ -884,20 +885,32 @@ export default {
     },
     decisionColor(decision) {
       if (!decision) return 'grey-6'
+      if (String(decision.error || '').includes('watchdog deadline')) return 'orange'
       if (decision.run_status === 'failed') return 'negative'
       if (decision.run_status === 'running') return 'orange'
       if (decision.outcome === 'no_orders') return 'blue-grey'
       return 'primary'
     },
+    decisionErrorText(decision) {
+      return String(decision?.error || '').includes('watchdog deadline')
+        ? 'Ricevuta originale non registrata. Il watchdog non dimostra che la strategia sia fallita.'
+        : decision?.error || ''
+    },
+    brokerDisplayStatus(status, filledQty, requestedQty) {
+      if (Number(filledQty) > 0 && Number(requestedQty) > 0) {
+        return Number(filledQty) < Number(requestedQty) ? 'partial fill' : 'filled'
+      }
+      return status === 'partially_filled' ? 'partial fill' : (status || 'stato sconosciuto')
+    },
     alpacaActivityText(order) {
       const intent = order.intent === 'CLOSE' ? 'CHIUSURA' : (order.intent === 'OPEN' ? 'APERTURA' : 'ORDINE')
-      return `${intent} ${order.symbol || '—'} · ${(order.side || '—').toUpperCase()} · ${order.status || 'stato sconosciuto'}`
+      return `${intent} ${order.symbol || '—'} · ${(order.side || '—').toUpperCase()} · ${this.brokerDisplayStatus(order.status, order.filled_qty, order.qty)}`
     },
     alpacaActivityDetail(order) {
       const parts = []
       if (order.time_in_force) parts.push(String(order.time_in_force).toUpperCase())
       if (order.qty !== null && order.qty !== undefined) parts.push(`qty ${this.qty(order.filled_qty || 0)} / ${this.qty(order.qty)}`)
-      if (order.filled_avg_price) parts.push(`prezzo ${this.num(order.filled_avg_price)}`)
+      if (Number(order.filled_qty || 0) > 0 && order.filled_avg_price) parts.push(`prezzo ${this.num(order.filled_avg_price)}`)
       if (order.position_intent) parts.push(order.position_intent)
       return parts.join(' · ') || 'Nessun dettaglio broker disponibile'
     },
@@ -908,26 +921,31 @@ export default {
         .join(' · ')
     },
     backtestReceiptTitle(settlements) {
-      return settlements?.some((item) => item.status === 'closed')
-        ? 'Backtrader — trade simulati completi'
-        : 'Backtrader — piano simulato'
+      return 'Backtest — ordini originali'
     },
     backtestOrderSettlement(order, settlements) {
       const symbol = String(order?.symbol || '').toUpperCase()
       return (settlements || []).find((item) => item.symbol === symbol && item.side === 'buy') || null
     },
-    backtestOrderSettlementText(order, settlements) {
+    backtestOrderSettlementText(order, settlements, verification = null) {
       const settled = this.backtestOrderSettlement(order, settlements)
-      if (!settled || settled.status !== 'closed') return ''
-      const pnl = Number(settled.pnl || 0)
-      return `CHIUSURA · SELL ${settled.symbol} · ${this.qty(settled.qty)} @ ${this.num(settled.exit_price)} · ${this.formatDate(settled.exit_date)} · P&L ${pnl >= 0 ? '+' : ''}${this.num(pnl)} (${this.signedPct(settled.pnl_pct)})`
+      if (!settled) return ''
+      if (settled.status !== 'closed') {
+        const check = (verification?.evidence?.checks || []).find(c => c.symbol === settled.symbol)
+        const reasons = (check?.reasons || []).filter(reason => reason.code !== 'reason_unavailable').map(reason => reason.label || reason.code)
+        if (reasons.length) return `CHIUSURA non recuperata · ${settled.symbol} · Divergenza ingresso originale/replay: ${reasons.join(' | ')}`
+        if (settled.detail?.pending_reason === 'replay_closed_trade_missing') return `CHIUSURA non recuperata · ${settled.symbol} · trade non ritrovato nel replay, causale non disponibile`
+        return 'CHIUSURA in attesa del replay'
+      }
+      const gain = settled.pnl == null || settled.entry_price == null
+        ? 'P&L non disponibile: prezzo di esecuzione ingresso non disponibile'
+        : `P&L ${settled.pnl >= 0 ? '+' : ''}${this.num(settled.pnl)}${settled.pnl_pct != null ? ` (${this.signedPct(settled.pnl_pct)})` : ''}`
+      return `CHIUSURA · SELL ${settled.symbol} · ${this.qty(settled.qty)} @ ${this.num(settled.exit_price)} · ${this.formatDate(settled.exit_date)} · ${gain}`
     },
     alpacaOrderSettlement(order, settlements) {
       const symbol = String(order?.symbol || '').toUpperCase()
-      const filled = Number(order?.filled_qty || 0) > 0 || String(order?.broker_status || order?.status || '').toLowerCase() === 'filled'
-      if (!filled) return null
       const settled = (settlements || []).find((item) => item.symbol === symbol && item.side === 'buy')
-      return settled?.status === 'closed' ? settled : null
+      return settled?.status === 'closed' && settled.entry_price != null ? settled : null
     },
     alpacaOrderSettlementText(order, settlements) {
       const settled = this.alpacaOrderSettlement(order, settlements)
@@ -941,17 +959,50 @@ export default {
       const symbol = order.symbol || '—'
       const side = String(order.side || '').toUpperCase() || 'ORDINE'
       const qty = order.filled_qty ?? order.qty
-      const price = order.filled_avg_price ?? order.reference_price
       if (source === 'backtest') {
         const settled = this.backtestOrderSettlement(order, settlements)
-        return `${side} ${symbol} · ${this.qty(qty)}${price != null ? ` @ ${this.num(price)}` : ''} · ${settled?.status === 'closed' ? 'APERTURA' : 'apertura prevista'}`
+        const price = settled?.entry_price ?? (Number(order.filled_qty || 0) > 0 ? order.filled_avg_price : null)
+        return `${side} ${symbol} · ${this.qty(qty)}${price != null ? ` @ ${this.num(price)} · APERTURA eseguita` : ' · prezzo di esecuzione non disponibile'}`
       }
-      const execution = order.broker_status || order.status || (order.execution_effective === false ? 'non eseguito' : 'inviato')
+      const entry = (settlements || []).find(s => s.symbol === symbol && s.side === String(order.side || '').toLowerCase())
+      const verifiedEntry = entry?.entry_price != null && Number(entry.detail?.entry_filled_qty || 0) > 0
+      const price = verifiedEntry ? entry.entry_price : (Number(order.filled_qty || 0) > 0 ? order.filled_avg_price : null)
+      const status = String(order.broker_status || order.status || '').toLowerCase()
+      const filledQty = verifiedEntry ? Number(entry.detail.entry_filled_qty) : Number(order.filled_qty || 0)
+      const partial = filledQty > 0 && filledQty < Number(order.qty)
+      const execution = this.brokerDisplayStatus(status, filledQty, order.qty)
       const settled = this.alpacaOrderSettlement(order, settlements)
-      const marker = settled?.detail?.entry_execution
-      return `${side} ${symbol} · ${this.qty(qty)}${price != null ? ` @ ${this.num(price)}` : ''} · ${execution}${marker ? ` · ${marker}` : ''}`
+      const marker = entry?.detail?.entry_execution || settled?.detail?.entry_execution
+      const quantity = partial ? `${this.qty(filledQty)}/${this.qty(order.qty)} eseguite` : this.qty(verifiedEntry ? filledQty : qty)
+      return `${side} ${symbol} · ${quantity}${price != null ? ` @ ${this.num(price)}` : status === 'expired' && filledQty === 0 ? '' : ' · prezzo di esecuzione non disponibile'} · ${execution}${marker ? ` · ${marker}` : ''}`
     },
-    orderBrokerDetail(order, source) {
+    replayCheckText(check) {
+      const labels = {
+        original_position_missing: 'Disallineamento: il replay produce una chiusura per una posizione assente nello storico originale; nessuna posizione aggiunta',
+        closure_not_recovered: 'Chiusura originale non recuperata nel replay',
+        closure_recovered: 'Chiusura ritrovata nel replay',
+      }
+      const reasons = (check.reasons || []).filter(r => r.code !== 'reason_unavailable').map(r => r.label || r.code).filter(Boolean)
+      return `${check.symbol}: ${labels[check.code] || check.code}${reasons.length ? ` · Causale replay: ${reasons.join(' | ')}` : ''}`
+    },
+    replayVerificationStatus(verification) {
+      if (verification.evidence?.original_history_missing) return "Manca l'esecuzione di backtest!"
+      if (verification.status === 'failed') return 'Verifica replay: fallita'
+      if (verification.evidence?.historical_association_pending) return 'Verifica replay: storico da verificare'
+      const checks = verification.evidence?.checks || []
+      const missing = checks.filter(c => c.code === 'original_position_missing').length
+      const notRecovered = checks.filter(c => c.code === 'closure_not_recovered').length
+      return `Verifica replay: ${[missing ? `${missing} chiusura/e senza posizione originale` : '', notRecovered ? `${notRecovered} chiusura/e non recuperata/e` : ''].filter(Boolean).join(', ') || 'completata'}`
+    },
+    replayVerificationText(verification) {
+      if (verification.evidence?.original_history_missing) return "Manca l'esecuzione di backtest!"
+      if (verification.evidence?.historical_association_pending) return 'Replay completato; associazione storica da verificare. Nessuna modifica agli ingressi.'
+      const reasons = (verification.evidence?.replay_reasons || [])
+        .filter(r => r.code !== 'reason_unavailable')
+        .map(r => r.label || r.code).filter(Boolean)
+      return `Replay completato senza chiusure${reasons.length ? ` · Causale replay: ${reasons.join(' | ')}` : ''}`
+    },
+    orderBrokerDetail(order, source, settlements = []) {
       if (!order) return ''
       const parts = []
       if (source === 'backtest') {
@@ -960,18 +1011,23 @@ export default {
       }
       if (order.client_order_id) parts.push(`client id ${order.client_order_id}`)
       if (order.alpaca_order_id || order.id) parts.push(`broker id ${order.alpaca_order_id || order.id}`)
-      if (order.execution_effective === false) parts.push('non conta come esecuzione effettiva')
+      const fill = (settlements || []).find(s => s.symbol === order.symbol && s.side === order.side)
+      if (order.execution_effective === false && Number(fill?.detail?.entry_filled_qty || order.filled_qty || 0) === 0) parts.push('non conta come esecuzione effettiva')
       return parts.join(' · ') || 'Dettaglio broker non ancora disponibile'
     },
     backtestSettlementExplanation(settlements) {
       const label = this.settlementLabel(settlements)
-      if (!settlements?.length || settlements.every((item) => item.status === 'pending')) {
-        return `Chiusura simulata: ${label}. Non può essere nota nella decisione d'ingresso; verrà mostrata soltanto da un replay con la candela successiva.`
+      const missing = (settlements || []).filter((item) => ['replay_closed_trade_missing', 'replay_decision_divergence'].includes(item.detail?.pending_reason))
+      if (missing.length) {
+        return `Chiusura non recuperata nel replay per ${missing.map((item) => item.symbol).join(', ')}: verificare disponibilità della barra d'uscita e riproducibilità del trade originale. La decisione originale resta invariata.`
       }
-      return `Esito dei trade completi nel replay: ${label}.`
+      if (!settlements?.length || settlements.every((item) => item.status === 'pending')) {
+        return `Chiusura simulata: ${label}. Prezzi mostrati solo quando disponibili come prezzi di esecuzione.`
+      }
+      return `Chiusure delle posizioni originali: ${label}. Le verifiche del replay sono riportate separatamente.`
     },
     entryComparisonLabel(comparison) {
-      return ({ matched: 'ingressi allineati', diverged: 'divergenza ingressi', incomplete: 'riconciliazione incompleta', error: 'errore riconciliazione' })[comparison?.status] || 'riconciliazione ingressi'
+      return ({ matched: 'ingressi originali allineati', diverged: 'divergenza ingressi originali', incomplete: 'riconciliazione incompleta', error: 'errore riconciliazione' })[comparison?.status] || 'riconciliazione ingressi'
     },
     entryComparisonColor(comparison) {
       return ({ matched: 'positive', diverged: 'negative', incomplete: 'orange', error: 'negative' })[comparison?.status] || 'primary'
@@ -1080,20 +1136,41 @@ export default {
       return Math.max(0, Math.min(1, 2 * upperTail))
     },
     rowBadgeColor(result) {
-      if (result.status === 'error') return 'grey-8'
+      if (this.replayFailed(result)) return 'grey-8'
+      if (result.summary?.historical_association_pending) return 'orange'
+      if (result.summary?.bt_settlement_pending) return 'orange'
       const counts = result.summary?.counts || {}
       const hard = Object.keys(counts).some((k) => k !== 'matched' && k !== 'sizing_divergence')
       return hard ? 'negative' : 'positive'
     },
     rowStatusLabel(result) {
-      if (result.status === 'error') return 'errore replay'
+      if (this.replayFailed(result)) return 'errore replay'
+      if (result.summary?.historical_association_pending) return 'associazione storica da verificare'
+      if (result.summary?.bt_settlement_pending) return 'chiusure non recuperate'
       const counts = result.summary?.counts || {}
       const hard = Object.keys(counts).some((k) => k !== 'matched' && k !== 'sizing_divergence')
       return hard ? 'divergenza' : 'pulito'
     },
+    replayFailed(result) {
+      if (result?.summary?.replay_execution_status === 'failed') return true
+      return result?.status === 'error' && !result.summary?.bt_settlement_pending
+    },
     resultHeadline(result) {
       if (!result) return ''
-      if (result.status === 'error') return 'Il replay del backtest è fallito per questo giorno.'
+      if (this.replayFailed(result)) return `Errore di esecuzione del replay: ${result.error || 'dettaglio non disponibile'}`
+      if (result.summary?.historical_association_pending) {
+        const reasons = (result.summary.bt_no_trade_reasons || []).map(reason => reason.label || reason.code)
+        const outcome = result.summary.bt_no_trade
+          ? `nessun ordine — ${reasons.join(' | ') || 'causale non disponibile'}`
+          : `${result.summary.bt_entry_count || 0} ordine/i`
+        return `Replay completato: ${outcome} · associazione del risultato storico da verificare; confronto non validato.`
+      }
+      if (result.summary?.bt_settlement_pending) {
+        const reasons = (result.summary.bt_replay_reasons || []).map(reason => reason.label || reason.code)
+        return reasons.length
+          ? `Replay completato: nessun trade da chiudere per gli ingressi originali · ${reasons.join(' | ')} · disallineamento ingresso originale/replay`
+          : 'Replay completato: chiusure non ancora disponibili per gli ingressi originali; causale non disponibile.'
+      }
       if (result.summary?.bt_no_trade || result.summary?.live_no_trade) {
         const side = (name, noTrade, reasons, count) => {
           if (!noTrade) return `${name}: ${count || 0} ordine/i`
@@ -1115,7 +1192,9 @@ export default {
       return `${hardKeys.length} tipo/i di divergenza su ${total} ordini confrontati.`
     },
     resultDetail(result) {
-      if (!result || result.status === 'error') return result?.error || ''
+      if (!result || this.replayFailed(result)) return result?.error || ''
+      if (result.summary?.historical_association_pending) return this.resultHeadline(result)
+      if (result.summary?.bt_settlement_pending) return this.resultHeadline(result)
       const sizing = (result.summary?.counts || {}).sizing_divergence
       if (sizing) {
         return 'Le quantità differiscono leggermente dal backtest: atteso, l\'equity simulata nel backtest diverge da quella reale su una finestra lunga — non è un errore di esecuzione.'
