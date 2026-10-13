@@ -1071,8 +1071,9 @@ export default {
           headers: { 'Cache-Control': 'no-cache' },
         })
         this.overview = data
-        if (!this.selectedBaselineId && data?.baselines?.length) {
-          this.selectedBaselineId = data.baselines[0].id
+        const baselines = data?.baselines || []
+        if (!baselines.some((baseline) => baseline.id === this.selectedBaselineId)) {
+          this.selectedBaselineId = baselines[0]?.id ?? null
         }
       } catch (err) {
         this.loadError = `Impossibile caricare il profilo ${this.selectedProfile}: ${err?.message || err}`
