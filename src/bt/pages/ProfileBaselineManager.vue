@@ -14,8 +14,8 @@
             clearable input-debounce="0" new-value-mode="add-unique" :options="filteredOptions"
             label="Profilo" outlined dense
             @filter="filterProfiles" @input-value="v => profileText = v || ''"
-            @update:model-value="v => { profileText = v || ''; loadBaselines() }"
-            @clear="() => { profileText = ''; baselines = [] }"
+            @update:model-value="onProfileChange"
+            @clear="onProfileClear"
           />
         </div>
         <div class="col-auto">
@@ -49,6 +49,11 @@
               La baseline acquisisce codice e configurazione correnti. Il checkout deve essere pulito e identificabile.
             </div>
             <div v-if="jobState" class="text-body2 q-mt-xs" :class="jobStateClass">{{ jobStateText }}</div>
+            <div v-if="jobState" class="text-caption text-grey-7">
+              Fase {{ jobState.phase || jobState.status }} · heartbeat {{ formatTimestamp(jobState.heartbeat_at || jobState.updated_at) }}
+              · <q-btn flat dense no-caps color="primary" label="Log" @click="openJobLog" />
+            </div>
+            <div v-if="pollError" class="text-caption text-negative">Errore di monitoraggio: {{ pollError }}</div>
           </div>
         </q-card-section>
       </q-card>
@@ -105,6 +110,13 @@
           </q-card-section>
         </q-card>
       </q-dialog>
+
+      <q-dialog v-model="logDialog">
+        <q-card style="min-width: 700px; max-width: 95vw">
+          <q-card-section class="row items-center q-pb-none"><div class="text-h6">Log creazione baseline</div><q-space /><q-btn dense flat icon="close" v-close-popup /></q-card-section>
+          <q-card-section><pre class="baseline-json">{{ logText || 'Nessun output disponibile.' }}</pre></q-card-section>
+        </q-card>
+      </q-dialog>
     </template>
 
     <div v-else class="text-grey-6 q-pa-lg text-center">Digita un profilo per gestirne le baseline.</div>
@@ -122,7 +134,8 @@ export default {
       knownProfiles: [], filteredOptions: [], selectedProfile: null, profileText: '',
       baselines: [], loading: false, loadError: '',
       form: { label: '', window_start: '2000-01-01', window_end: `${new Date().getFullYear()}-01-01` },
-      jobId: null, jobState: null, jobTimer: null,
+      jobId: null, jobState: null, jobTimer: null, pollError: '', requestVersion: 0,
+      logDialog: false, logText: '',
       detailDialog: false, selectedBaselineDetail: null,
     }
   },
@@ -140,15 +153,16 @@ export default {
       ]
     },
     canSubmit() {
-      return this.profile && this.form.label.trim() &&
+      return !this.jobRunning && this.profile && this.form.label.trim() &&
         /^\d{4}-\d{2}-\d{2}$/.test(this.form.window_start) && /^\d{4}-\d{2}-\d{2}$/.test(this.form.window_end)
     },
-    jobRunning() { return this.jobState && !this.jobState.done },
+    jobRunning() { return ['queued', 'running'].includes(this.jobState?.status) },
     jobStateText() {
       if (!this.jobState) return ''
       const s = this.jobState
-      if (s.status === 'completed') return `Baseline creata (id ${s.baseline_id}).`
+      if (s.status === 'completed') return `Baseline creata (id ${s.baseline_id || s.result?.baseline_id || '—'}).`
       if (s.status === 'failed') return `Job fallito: ${s.error || 'errore sconosciuto'}`
+      if (s.status === 'interrupted') return `Job interrotto: ${s.error || 'worker non più attivo'}`
       return 'Backtest in corso… (può richiedere minuti)'
     },
     jobStateClass() {
@@ -159,6 +173,18 @@ export default {
   mounted() { this.loadProfiles() },
   beforeUnmount() { if (this.jobTimer) clearInterval(this.jobTimer) },
   methods: {
+    formatTimestamp(value) { return value ? new Date(value).toLocaleString('it-IT') : '—' },
+    onProfileChange(value) {
+      this.profileText = value || ''
+      this.loadBaselines()
+      this.recoverJob()
+    },
+    onProfileClear() {
+      this.profileText = ''; this.baselines = []; this.jobState = null; this.jobId = null
+      this.requestVersion += 1
+      if (this.jobTimer) clearInterval(this.jobTimer)
+      this.jobTimer = null
+    },
     async loadProfiles() {
       try {
         const { data } = await api.get('/dyn/obs/watchtower/cron/profiles')
@@ -194,6 +220,22 @@ export default {
         this.loadError = `Impossibile caricare le baseline: ${e?.message || e}`; this.baselines = []
       } finally { this.loading = false }
     },
+    async recoverJob() {
+      const profile = this.profile
+      const version = ++this.requestVersion
+      if (this.jobTimer) clearInterval(this.jobTimer)
+      this.jobTimer = null; this.pollError = ''
+      if (!profile) return
+      try {
+        const { data } = await api.get('/dyn/sc/calculations', { params: { profile, limit: 20, _ts: Date.now() } })
+        if (version !== this.requestVersion || profile !== this.profile) return
+        this.jobState = (data || []).find(job => job.kind === 'baseline_build') || null
+        this.jobId = this.jobState?.id || null
+        if (this.jobRunning) this.pollJob(profile)
+      } catch (e) {
+        if (version === this.requestVersion) this.pollError = e?.message || String(e)
+      }
+    },
     async startJob() {
       try {
         const { data } = await api.post(`/dyn/obs/watchtower/cron/${encodeURIComponent(this.profile)}/baselines`, {
@@ -201,25 +243,35 @@ export default {
           window_start: this.form.window_start,
           window_end: this.form.window_end,
         })
-        this.jobId = data.job_id
+        this.jobId = data.id || data.job_id
         this.jobState = data
-        this.pollJob()
+        this.pollJob(this.profile)
       } catch (e) {
         Notify.create({ type: 'negative', message: e?.response?.data?.error || e?.message || 'Errore avvio job' })
       }
     },
-    pollJob() {
+    pollJob(profile = this.profile) {
       if (this.jobTimer) clearInterval(this.jobTimer)
       this.jobTimer = setInterval(async () => {
         try {
-          const { data } = await api.get(`/dyn/obs/watchtower/cron/baselines/jobs/${this.jobId}`)
+          const jobId = this.jobId
+          const { data } = await api.get(`/dyn/sc/calculations/${jobId}`)
+          if (profile !== this.profile || jobId !== this.jobId) return
           this.jobState = data
+          this.pollError = ''
           if (data.done) {
             clearInterval(this.jobTimer); this.jobTimer = null
             if (data.status === 'completed') { this.form.label = ''; this.loadBaselines() }
           }
-        } catch (e) { clearInterval(this.jobTimer); this.jobTimer = null }
+        } catch (e) { if (profile === this.profile) this.pollError = e?.message || String(e) }
       }, 3000)
+    },
+    async openJobLog() {
+      if (!this.jobId) return
+      try {
+        const { data } = await api.get(`/dyn/sc/calculations/${this.jobId}/log`)
+        this.logText = data.output || ''; this.logDialog = true
+      } catch (e) { Notify.create({ type: 'negative', message: e?.message || 'Log non disponibile' }) }
     },
     async removeBaseline(row) {
       try {

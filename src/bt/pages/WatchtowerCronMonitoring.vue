@@ -147,8 +147,40 @@
             Crea e seleziona una baseline per confrontarla con la finestra recente.
           </div>
           <template v-else>
-            <q-select v-model="selectedBaselineId" :options="baselineOptions" dense outlined emit-value map-options
-              label="Baseline" class="q-mb-sm" />
+            <div class="row q-col-gutter-sm items-center q-mb-sm">
+              <div class="col-12 col-md">
+                <q-select v-model="selectedBaselineId" :options="baselineOptions" dense outlined emit-value map-options
+                  label="Baseline" />
+              </div>
+              <div class="col-auto">
+                <q-btn color="primary" icon="refresh" label="Ricalcola ultime 25 giornate"
+                  :loading="calculationActive" :disable="rebuildDisabled" @click="confirmBacktestRebuild">
+                  <q-tooltip>{{ rebuildDisabledReason || 'Sostituisce soltanto le evidenze Backtest delle 25 sessioni mostrate nella conferma.' }}</q-tooltip>
+                </q-btn>
+              </div>
+            </div>
+            <q-card v-if="calculationJob" flat bordered class="q-mb-sm bg-grey-1">
+              <q-card-section class="q-py-sm">
+                <div class="row items-center q-col-gutter-sm">
+                  <div class="col">
+                    <b>Ricalcolo:</b> {{ calculationStatusText }}
+                    <div class="text-caption text-grey-7">
+                      Fase {{ calculationJob.phase || calculationJob.status }} ·
+                      heartbeat {{ formatTimestamp(calculationJob.heartbeat_at || calculationJob.updated_at) }}
+                    </div>
+                    <div v-if="calculationPollingError" class="text-negative text-caption">
+                      Errore di monitoraggio: {{ calculationPollingError }}
+                    </div>
+                  </div>
+                  <div class="col-auto">
+                    <q-btn flat dense no-caps color="primary" label="Log" @click="openCalculationLog" />
+                  </div>
+                </div>
+                <q-linear-progress v-if="calculationJob.progress_total" class="q-mt-sm" rounded
+                  :value="calculationJob.progress_done / calculationJob.progress_total" />
+                <div v-if="calculationJob.error" class="text-negative text-caption q-mt-xs">{{ calculationJob.error }}</div>
+              </q-card-section>
+            </q-card>
             <div class="text-body1">Confronto della baseline con i replay della riconciliazione giornaliera.</div>
             <div class="overflow-auto">
               <table class="footprint-table q-mt-sm">
@@ -248,7 +280,8 @@
           row-key="key"
           dense
           flat
-          v-model:pagination="tablePagination"
+          :pagination="{ rowsPerPage: 0 }"
+          hide-bottom
         >
           <template #body="props">
             <q-tr
@@ -477,6 +510,13 @@
         </q-list>
       </q-card>
     </template>
+
+    <q-dialog v-model="calculationLogDialog">
+      <q-card style="min-width: 700px; max-width: 95vw">
+        <q-card-section class="row items-center q-pb-none"><div class="text-h6">Log calcolo</div><q-space /><q-btn flat round dense icon="close" v-close-popup /></q-card-section>
+        <q-card-section><pre class="stratargs-pre">{{ calculationLogText || 'Nessun output disponibile.' }}</pre></q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -509,15 +549,20 @@ export default {
       loading: false,
       loadError: '',
       expandedDays: [],
-      tablePagination: { rowsPerPage: 10 },
       selectedBaselineId: null,
       markerDate: new Date().toISOString().slice(0, 10),
       markerLabel: '',
       markerSaving: false,
       paramsDialog: false,
       paramsDialogVersion: null,
-      historyDays: 20,
-      historyDayOptions: [5, 10, 20, 30, 60].map(value => ({ value, label: `${value} giorni` })),
+      historyDays: 25,
+      historyDayOptions: [10, 25, 50].map(value => ({ value, label: `${value} giornate` })),
+      calculationJob: null,
+      calculationTimer: null,
+      calculationRequestVersion: 0,
+      calculationPollingError: '',
+      calculationLogDialog: false,
+      calculationLogText: '',
     }
   },
   computed: {
@@ -608,6 +653,22 @@ export default {
     selectedBaseline() {
       const rows = this.overview?.baselines || []
       return rows.find((b) => b.id === this.selectedBaselineId) || rows[0] || null
+    },
+    calculationActive() { return ['queued', 'running'].includes(this.calculationJob?.status) },
+    rebuildDisabled() { return !this.selectedBaseline || this.calculationActive },
+    rebuildDisabledReason() {
+      if (!this.selectedBaseline) return 'Seleziona una baseline completa.'
+      if (this.calculationActive) return 'È già attivo un calcolo pesante per questo profilo.'
+      return ''
+    },
+    calculationStatusText() {
+      const job = this.calculationJob
+      if (!job) return ''
+      if (job.status === 'running' && job.progress_total) return `${job.progress_done}/${job.progress_total} giornate`
+      if (job.status === 'completed') return `completato (${job.progress_done}/${job.progress_total || 25})`
+      if (job.status === 'failed') return `fallito dopo ${job.progress_done}/${job.progress_total || 25} giornate`
+      if (job.status === 'interrupted') return 'interrotto al riavvio; non rilanciato automaticamente'
+      return job.status
     },
     comparisonWindows() {
       return [3, 5, 10, 15, 20, 25].map((days) => ({
@@ -732,12 +793,9 @@ export default {
         detail: p.reason === 'open_day' ? 'giorno ancora aperto / non settled' : 'in attesa di elaborazione',
         raw: null,
       }))
-      const cutoff = new Date()
-      cutoff.setDate(cutoff.getDate() - this.historyDays + 1)
-      const cutoffDay = cutoff.toISOString().slice(0, 10)
       return [...pendingRows, ...rows]
         .sort((a, b) => b.sortDate.localeCompare(a.sortDate))
-        .filter((row) => row.sortDate >= cutoffDay)
+        .slice(0, this.historyDays)
     },
     statusHeadline() {
       if (!this.overview) return ''
@@ -791,7 +849,91 @@ export default {
   async mounted() {
     await this.loadProfiles()
   },
+  beforeUnmount() {
+    this.stopCalculationPolling()
+  },
   methods: {
+    formatTimestamp(value) {
+      if (!value) return '—'
+      return new Date(value).toLocaleString('it-IT')
+    },
+    stopCalculationPolling() {
+      if (this.calculationTimer) window.clearInterval(this.calculationTimer)
+      this.calculationTimer = null
+    },
+    async recoverCalculation(profile = this.selectedProfile) {
+      const version = ++this.calculationRequestVersion
+      this.stopCalculationPolling()
+      this.calculationPollingError = ''
+      if (!profile) { this.calculationJob = null; return }
+      try {
+        const { data } = await api.get('/dyn/sc/calculations', { params: { profile, limit: 20, _ts: Date.now() } })
+        if (version !== this.calculationRequestVersion || profile !== this.selectedProfile) return
+        this.calculationJob = (data || []).find(job => job.kind === 'backtest_rebuild') || null
+        if (this.calculationActive) this.startCalculationPolling(this.calculationJob.id, profile)
+      } catch (error) {
+        if (version === this.calculationRequestVersion) this.calculationPollingError = error?.message || String(error)
+      }
+    },
+    startCalculationPolling(jobId, profile) {
+      this.stopCalculationPolling()
+      const poll = async () => {
+        try {
+          const { data } = await api.get(`/dyn/sc/calculations/${encodeURIComponent(jobId)}`, { params: { _ts: Date.now() } })
+          if (profile !== this.selectedProfile || jobId !== this.calculationJob?.id) return
+          const wasActive = this.calculationActive
+          this.calculationJob = data
+          this.calculationPollingError = ''
+          if (data.done) {
+            this.stopCalculationPolling()
+            if (wasActive && data.status === 'completed') await this.loadOverview()
+          }
+        } catch (error) {
+          if (profile === this.selectedProfile && jobId === this.calculationJob?.id) {
+            this.calculationPollingError = error?.message || String(error)
+          }
+        }
+      }
+      this.calculationTimer = window.setInterval(poll, 3000)
+    },
+    async confirmBacktestRebuild() {
+      const profile = this.selectedProfile
+      const baseline = this.selectedBaseline
+      if (!profile || !baseline) return
+      try {
+        const { data: preview } = await api.get(`/dyn/obs/watchtower/cron/${encodeURIComponent(profile)}/backtest-rebuild/preview`, {
+          params: { baseline_id: baseline.id, window: 25 },
+        })
+        this.$q.dialog({
+          title: 'Conferma ricalcolo Backtest',
+          message: `Profilo ${profile}, baseline "${baseline.label}" (#${baseline.id}). Saranno sostituite soltanto le evidenze Backtest per queste 25 sessioni: ${preview.dates.join(', ')}. Le evidenze Alpaca restano intatte.`,
+          ok: { label: 'Ricalcola', color: 'primary' }, cancel: { label: 'Annulla', flat: true },
+        }).onOk(async () => {
+          try {
+            const { data } = await api.post(`/dyn/obs/watchtower/cron/${encodeURIComponent(profile)}/backtest-rebuild`, {
+              baseline_id: baseline.id, window: 25, replace_backtest: true, preview_dates: preview.dates,
+            })
+            if (profile !== this.selectedProfile) return
+            this.calculationJob = data
+            this.startCalculationPolling(data.id, profile)
+          } catch (error) {
+            this.$q.notify({ color: 'negative', message: error?.response?.data?.error || error?.message || 'Avvio non riuscito' })
+          }
+        })
+      } catch (error) {
+        this.$q.notify({ color: 'negative', message: error?.response?.data?.error || error?.message || 'Preview non disponibile' })
+      }
+    },
+    async openCalculationLog() {
+      if (!this.calculationJob?.id) return
+      try {
+        const { data } = await api.get(`/dyn/sc/calculations/${encodeURIComponent(this.calculationJob.id)}/log`)
+        this.calculationLogText = data.output || ''
+        this.calculationLogDialog = true
+      } catch (error) {
+        this.$q.notify({ color: 'negative', message: error?.message || 'Log non disponibile' })
+      }
+    },
     openParams(version) {
       this.paramsDialogVersion = version || null
       this.paramsDialog = true
@@ -1052,7 +1194,11 @@ export default {
         })
         this.profiles = data || []
         if (this.profiles.length && !this.selectedProfile) {
-          this.selectedProfile = this.profiles[0].profile
+          // L'ordine restituito dall'API non è una preferenza utente: il
+          // monitor deve aprirsi sul profilo operativo, quando disponibile.
+          this.selectedProfile = this.profiles.find((profile) =>
+            String(profile?.profile || '').trim().toLowerCase() === 'live'
+          )?.profile || this.profiles[0].profile
         }
         if (this.selectedProfile) await this.loadOverview()
       } catch (err) {
@@ -1063,21 +1209,31 @@ export default {
     },
     async loadOverview() {
       if (!this.selectedProfile) return
+      const profile = this.selectedProfile
+      this.calculationRequestVersion = (this.calculationRequestVersion || 0) + 1
+      const requestVersion = this.calculationRequestVersion
+      if (this.stopCalculationPolling) this.stopCalculationPolling()
       this.loading = true
       this.loadError = ''
       try {
-        const { data } = await api.get(`/dyn/obs/watchtower/cron/${this.selectedProfile}/overview`, {
+        const { data } = await api.get(`/dyn/obs/watchtower/cron/${profile}/overview`, {
           params: { _ts: Date.now() },
           headers: { 'Cache-Control': 'no-cache' },
         })
+        if (profile !== this.selectedProfile) return
         this.overview = data
         const baselines = data?.baselines || []
         if (!baselines.some((baseline) => baseline.id === this.selectedBaselineId)) {
           this.selectedBaselineId = baselines[0]?.id ?? null
         }
+        if (requestVersion === this.calculationRequestVersion && this.recoverCalculation) {
+          await this.recoverCalculation(profile)
+        }
       } catch (err) {
-        this.loadError = `Impossibile caricare il profilo ${this.selectedProfile}: ${err?.message || err}`
-        this.overview = null
+        if (profile === this.selectedProfile) {
+          this.loadError = `Impossibile caricare il profilo ${profile}: ${err?.message || err}`
+          this.overview = null
+        }
       } finally {
         this.loading = false
       }
@@ -1262,7 +1418,6 @@ export default {
       const key = `day-${day}`
       const index = this.reconciliationRows.findIndex((row) => row.key === key || row.key === `pend-${day}`)
       if (index >= 0) {
-        this.tablePagination.page = Math.floor(index / this.tablePagination.rowsPerPage) + 1
         if (!this.expandedDays.includes(key)) this.expandedDays.push(key)
       }
       this.$nextTick(() => document.getElementById('reconciliation-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
