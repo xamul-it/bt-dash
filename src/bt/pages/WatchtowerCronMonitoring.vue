@@ -153,6 +153,13 @@
                   label="Baseline" />
               </div>
               <div class="col-auto">
+                <q-btn flat no-caps color="primary" icon="description" label="stats.html"
+                  :href="baselineStatsUrl(selectedBaseline) || undefined" target="_blank" rel="noopener noreferrer"
+                  :disable="!baselineStatsUrl(selectedBaseline)" />
+                <q-btn flat no-caps color="primary" icon="info" label="Parametri run"
+                  @click="baselineDetail = selectedBaseline; baselineDetailDialog = true" />
+              </div>
+              <div class="col-auto">
                 <q-btn color="primary" icon="refresh" label="Ricalcola ultime 25 giornate"
                   :loading="calculationActive" :disable="rebuildDisabled" @click="confirmBacktestRebuild">
                   <q-tooltip>{{ rebuildDisabledReason || 'Sostituisce soltanto le evidenze Backtest delle 25 sessioni mostrate nella conferma.' }}</q-tooltip>
@@ -511,6 +518,34 @@
       </q-card>
     </template>
 
+    <q-dialog v-model="baselineDetailDialog" maximized>
+      <q-card v-if="baselineDetail">
+        <q-bar>
+          <div>Parametri run baseline — {{ baselineDetail.label }} (#{{ baselineDetail.id }})</div>
+          <q-space />
+          <q-btn dense flat icon="close" v-close-popup />
+        </q-bar>
+        <q-card-section class="q-gutter-md">
+          <div><b>Run ID:</b> <code>{{ baselineDetail.run_id || 'non disponibile' }}</code></div>
+          <div>
+            <b>Leva broker:</b> {{ baselineDetail.run_config?.margin_leverage ?? baselineDetail.result_snapshot?.input_margin_leverage ?? 'n/d' }}× ·
+            <b>Esposizione massima:</b> {{ baselineDetail.effective_params?.max_exposure ?? baselineDetail.params?.max_exposure ?? 'n/d' }}×
+          </div>
+          <q-btn v-if="baselineStatsUrl(baselineDetail)" outline no-caps color="primary" icon="open_in_new"
+            label="Apri stats.html" :href="baselineStatsUrl(baselineDetail)" target="_blank" rel="noopener noreferrer" />
+          <div class="text-caption text-grey-7">Parametri salvati nel run della baseline selezionata; non sono la configurazione corrente del profilo.</div>
+          <div class="text-subtitle2">Parametri strategia richiesti</div>
+          <pre class="stratargs-pre">{{ JSON.stringify(baselineDetail.params || {}, null, 2) }}</pre>
+          <div class="text-subtitle2">Parametri strategia effettivi (inclusi i default)</div>
+          <pre class="stratargs-pre">{{ JSON.stringify(baselineDetail.effective_params || {}, null, 2) }}</pre>
+          <div class="text-subtitle2">Configurazione del run</div>
+          <pre class="stratargs-pre">{{ JSON.stringify(baselineDetail.run_config || {}, null, 2) }}</pre>
+          <div><b>Commit applicazione:</b> <code>{{ baselineDetail.code_commit || 'non disponibile' }}</code></div>
+          <div><b>Commit bt-core:</b> <code>{{ baselineDetail.core_commit || 'non disponibile' }}</code></div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+
     <q-dialog v-model="calculationLogDialog">
       <q-card style="min-width: 700px; max-width: 95vw">
         <q-card-section class="row items-center q-pb-none"><div class="text-h6">Log calcolo</div><q-space /><q-btn flat round dense icon="close" v-close-popup /></q-card-section>
@@ -522,6 +557,7 @@
 
 <script>
 import { api } from 'boot/axios'
+import { constants } from 'boot/constants'
 
 const CATEGORY_LABELS = {
   never_submitted: 'atteso dal backtest ma nessun ordine reale trovato',
@@ -550,6 +586,8 @@ export default {
       loadError: '',
       expandedDays: [],
       selectedBaselineId: null,
+      baselineDetail: null,
+      baselineDetailDialog: false,
       markerDate: new Date().toISOString().slice(0, 10),
       markerLabel: '',
       markerSaving: false,
@@ -853,6 +891,10 @@ export default {
     this.stopCalculationPolling()
   },
   methods: {
+    baselineStatsUrl(baseline) {
+      if (!baseline?.id || !baseline?.profile || !baseline?.run_id) return ''
+      return `${constants.API_BASE_URL.replace(/\/$/, '')}/dyn/obs/watchtower/cron/${encodeURIComponent(baseline.profile)}/baselines/${encodeURIComponent(baseline.id)}/stats.html`
+    },
     formatTimestamp(value) {
       if (!value) return '—'
       return new Date(value).toLocaleString('it-IT')

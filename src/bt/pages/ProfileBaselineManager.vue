@@ -68,10 +68,21 @@
               <q-badge :color="compatibilityColor(props.row.compatibility)" :label="compatibilityLabel(props.row.compatibility)" />
             </q-td>
           </template>
+          <template #body-cell-run="props">
+            <q-td :props="props">
+              <div>Leva: {{ runValue(props.row, 'margin_leverage') }}× · Esposizione: {{ exposureValue(props.row) }}×</div>
+              <div class="text-caption text-grey-7">Cooldown: {{ cooldownValue(props.row) }}</div>
+            </q-td>
+          </template>
           <template #body-cell-actions="props">
             <q-td :props="props">
-              <q-btn flat dense round icon="info" color="primary" @click="showDetail(props.row)">
-                <q-tooltip>Dettaglio ricevuta baseline</q-tooltip>
+              <q-btn flat dense no-caps icon="description" label="stats.html" color="primary"
+                     :href="statsUrl(props.row) || undefined" target="_blank" rel="noopener noreferrer"
+                     :disable="!statsUrl(props.row)">
+                <q-tooltip>Apri il report del run salvato</q-tooltip>
+              </q-btn>
+              <q-btn flat dense no-caps icon="info" label="Parametri run" color="primary" @click="showDetail(props.row)">
+                <q-tooltip>Configurazione e parametri effettivamente salvati nel run</q-tooltip>
               </q-btn>
               <q-btn flat dense round icon="delete" color="negative" @click="removeBaseline(props.row)" />
             </q-td>
@@ -92,6 +103,16 @@
               <div class="col-12 col-md-6"><b>Commit bt-core:</b> <code>{{ selectedBaselineDetail.core_commit || 'legacy/non disponibile' }}</code></div>
               <div class="col-12"><b>Hash configurazione:</b> <code>{{ selectedBaselineDetail.configuration_hash || 'legacy/non disponibile' }}</code></div>
               <div class="col-12"><b>Run ID:</b> <code>{{ selectedBaselineDetail.run_id || 'non disponibile' }}</code></div>
+              <div class="col-12">
+                <b>Leva broker:</b> {{ runValue(selectedBaselineDetail, 'margin_leverage') }}× ·
+                <b>Esposizione massima:</b> {{ exposureValue(selectedBaselineDetail) }}× ·
+                <b>Cooldown:</b> {{ cooldownValue(selectedBaselineDetail) }}
+              </div>
+              <div class="col-12">
+                <q-btn v-if="statsUrl(selectedBaselineDetail)" outline no-caps color="primary" icon="open_in_new"
+                       label="Apri stats.html" :href="statsUrl(selectedBaselineDetail)"
+                       target="_blank" rel="noopener noreferrer" />
+              </div>
               <div class="col-12" v-if="selectedBaselineDetail.result_snapshot?.param_outpath"><b>Output run:</b> <code>{{ selectedBaselineDetail.result_snapshot.param_outpath }}</code></div>
             </div>
             <q-separator />
@@ -99,7 +120,10 @@
             <div v-if="selectedBaselineDetail.compatibility?.differences?.length" class="text-orange-10">
               Differenze: {{ selectedBaselineDetail.compatibility.differences.join(', ') }}
             </div>
-            <div class="text-subtitle2">Parametri effettivi</div>
+            <div class="text-caption text-grey-7">Valori salvati da questa esecuzione, indipendenti dalla configurazione corrente del profilo. Per le baseline legacy alcuni valori possono non essere disponibili.</div>
+            <div class="text-subtitle2">Parametri strategia richiesti</div>
+            <pre class="baseline-json">{{ formatJson(selectedBaselineDetail.params) }}</pre>
+            <div class="text-subtitle2">Parametri strategia effettivi (inclusi i default)</div>
             <pre class="baseline-json">{{ formatJson(selectedBaselineDetail.effective_params) }}</pre>
             <div class="text-subtitle2">Configurazione del run</div>
             <pre class="baseline-json">{{ formatJson(selectedBaselineDetail.run_config) }}</pre>
@@ -126,6 +150,7 @@
 <script>
 import { api } from 'boot/axios'
 import { Notify } from 'quasar'
+import { constants } from 'boot/constants'
 
 export default {
   name: 'ProfileBaselineManager',
@@ -146,6 +171,7 @@ export default {
         { name: 'label', label: 'Nome', field: 'label', align: 'left' },
         { name: 'window', label: 'Finestra', field: (r) => `${r.window_start} → ${r.window_end}`, align: 'left' },
         { name: 'status', label: 'Stato', field: (r) => r.compatibility?.status || 'unknown', align: 'left' },
+        { name: 'run', label: 'Parametri run', field: 'run_config', align: 'left' },
         { name: 'commits', label: 'Codice', field: (r) => this.shortHash(r.core_commit || r.code_commit), align: 'left' },
         { name: 'sample_size', label: 'Trade', field: 'sample_size', align: 'right' },
         { name: 'created_at', label: 'Calcolata', field: (r) => String(r.created_at || '').slice(0, 16).replace('T', ' '), align: 'left' },
@@ -173,6 +199,27 @@ export default {
   mounted() { this.loadProfiles() },
   beforeUnmount() { if (this.jobTimer) clearInterval(this.jobTimer) },
   methods: {
+    statsUrl(row) {
+      const strategy = String(row?.strategy || '').split('.')
+      const runId = String(row?.run_id || '')
+      if (strategy.length !== 2 || !strategy.every(part => /^[A-Za-z0-9_]+$/.test(part)) ||
+          !/^[A-Za-z0-9_-]+$/.test(runId)) return ''
+      if (!row?.id || !row?.profile) return ''
+      return `${constants.API_BASE_URL.replace(/\/$/, '')}/dyn/obs/watchtower/cron/${encodeURIComponent(row.profile)}/baselines/${encodeURIComponent(row.id)}/stats.html`
+    },
+    runValue(row, key) {
+      return row?.run_config?.[key] ?? row?.result_snapshot?.[`input_${key}`] ?? 'n/d'
+    },
+    exposureValue(row) {
+      return row?.effective_params?.max_exposure ?? row?.params?.max_exposure ?? 'n/d'
+    },
+    cooldownValue(row) {
+      const params = { ...row?.params, ...row?.effective_params }
+      const threshold = params.post_up_cooldown_threshold
+      const days = params.post_up_cooldown_days
+      if (threshold == null || days == null) return 'n/d'
+      return Number(threshold) <= 0 || Number(days) <= 0 ? 'disattivato' : `${threshold} / ${days} sedute`
+    },
     formatTimestamp(value) { return value ? new Date(value).toLocaleString('it-IT') : '—' },
     onProfileChange(value) {
       this.profileText = value || ''
