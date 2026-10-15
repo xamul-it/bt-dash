@@ -4,10 +4,10 @@ const routes = [
     path: '/',
     component: () => import('layouts/MainLayout.vue'),
     children: [
-      { path: '', component: () => import('src/bt/pages/Index.vue') },
-      { path: '/Configure', component: () => import('src/bt/pages/Configure.vue')},
-      { path: '/Benchmark', component: () => import('src/bt/pages/Benchmark.vue')},
-      { path: '/ExecuteStrategy', component: () => import('src/bt/pages/ExecuteStrategy.vue')},
+      { path: '', component: () => import('src/bt/pages/BacktestingStudio.vue'), props: { initialTab: 'runs' } },
+      { path: '/Configure', component: () => import('src/bt/pages/SimulationData.vue')},
+      { path: '/Benchmark', component: () => import('src/bt/pages/SimulationBenchmarks.vue')},
+      { path: '/ExecuteStrategy', component: () => import('src/bt/pages/BacktestingStudio.vue')},
       { path: '/Scheduler', component: () => import('src/bt/pages/Scheduler.vue')},
       { path: '/Watchtower', component: () => import('src/bt/pages/Watchtower.vue')},
       { path: '/Watchtower/CronMonitoring', component: () => import('src/bt/pages/WatchtowerCronMonitoring.vue')},
@@ -17,7 +17,7 @@ const routes = [
       { path: '/ScheduledProfiles/Baselines', component: () => import('src/bt/pages/ProfileBaselineManager.vue')},
       { path: '/Alpaca', component: () => import('src/bt/pages/Alpaca.vue')},
 
-      { path: '/Dashboard', component: () => import('src/bt/pages/Index.vue')},
+      { path: '/Dashboard', component: () => import('src/bt/pages/BacktestingStudio.vue'), props: { initialTab: 'runs' } },
       { path: '/Dashboard3', component: () => import('pages/Dashboard.vue')},
       { path: '/Dashboard2', component: () => import('pages/Dashboard2.vue')},
       { path: '/Cards', component: () => import('pages/Cards.vue')},

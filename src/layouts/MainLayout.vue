@@ -68,7 +68,7 @@
             <q-icon name="build"/>
           </q-item-section>
           <q-item-section>
-            <q-item-label>Elenco Tickers</q-item-label>
+            <q-item-label>Dati ticker</q-item-label>
           </q-item-section>
         </q-item>
 
