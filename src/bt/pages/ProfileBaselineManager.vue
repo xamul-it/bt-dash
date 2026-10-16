@@ -32,7 +32,8 @@
         <q-separator />
         <q-card-section class="row q-col-gutter-md items-end">
           <div class="col-12 col-md-3">
-            <q-input v-model="form.label" label="Nome (label)" outlined dense />
+            <q-input v-model="form.label" label="Nome (label)" outlined dense
+                     :error="duplicateLabel" error-message="Esiste già una baseline con questa label." />
           </div>
           <div class="col-6 col-md-2">
             <q-input v-model="form.window_start" label="Data inizio" mask="####-##-##" outlined dense hint="YYYY-MM-DD" />
@@ -179,8 +180,12 @@ export default {
       ]
     },
     canSubmit() {
-      return !this.jobRunning && this.profile && this.form.label.trim() &&
+      return !this.jobRunning && !this.duplicateLabel && this.profile && this.form.label.trim() &&
         /^\d{4}-\d{2}-\d{2}$/.test(this.form.window_start) && /^\d{4}-\d{2}-\d{2}$/.test(this.form.window_end)
+    },
+    duplicateLabel() {
+      const label = this.form.label.trim()
+      return Boolean(label && this.baselines.some((row) => String(row.label || '') === label))
     },
     jobRunning() { return ['queued', 'running'].includes(this.jobState?.status) },
     jobStateText() {

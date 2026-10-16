@@ -98,7 +98,7 @@
         </q-card-section>
         <q-separator />
         <q-card-section>
-          <div v-if="!selectedBaseline || !prePost.pre || !prePost.post" class="text-grey-6">
+          <div v-if="!selectedBaseline" class="text-grey-6">
             Crea e seleziona una baseline per confrontarla con la finestra recente.
           </div>
           <template v-else>
@@ -634,13 +634,6 @@ export default {
     paramsDialogBacktestVisible() {
       const version = this.dialogParamsVersion
       return version && JSON.stringify(version.stratargs || {}) !== JSON.stringify(this.backtestStratargs(version))
-    },
-    prePost() {
-      const footprints = this.overview?.footprints || []
-      return {
-        pre: footprints.find((f) => f.period === 'pre_activation'),
-        post: footprints.find((f) => f.period === 'post_activation'),
-      }
     },
     baselineOptions() { return (this.overview?.baselines || []).map((b) => ({ label: `${b.label} (${this.dateRange(b)})`, value: b.id })) },
     selectedBaseline() {
