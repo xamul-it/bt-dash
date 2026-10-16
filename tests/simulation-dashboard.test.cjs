@@ -10,20 +10,45 @@ test('pin icons use bundled SVGs without relying on an unloaded icon font', () =
   assert.match(source, /:icon="run\.archive\?\.pinned \? pinFilled : pinOutlined"/)
   assert.doesNotMatch(source, /'o_push_pin'/)
 })
-test('dashboard keeps independent runs, pinned first, with reversible trash', () => {
-  const body = source.match(/cards\(\) \{([\s\S]*?)\n    \},/)[1]
-  const cards = new Function(body)
-  const run = (id, strategy, status = 'completed', hidden = false) => ({ id, created_at: id, kind: 'simulation', status, archive: { hidden }, request_snapshot: { configuration: { strategy } } })
-  const context = { jobs: [run('1', 'A'), run('2', 'A'), run('3', 'A', 'failed'), run('4', 'B', 'completed', true), run('5', 'C')], search: '', showTrash: false, config: r => r.request_snapshot.configuration }
+test('dashboard groups equal titles and opens newest-first history', () => {
+  const computed = name => new Function(source.match(new RegExp(`    ${name}\\(\\) \\{([\\s\\S]*?)\\n    \\},`))[1])
+  const visibleRuns = computed('visibleRuns')
+  const runGroups = computed('runGroups')
+  const cards = computed('cards')
+  const run = (id, title, status = 'completed', hidden = false) => ({
+    id, created_at: id, finished_at: id, kind: 'simulation', status, archive: { hidden },
+    request_snapshot: { configuration: { strategy: 'Strategy', label: title } },
+  })
+  const context = {
+    jobs: [run('1', 'challenger'), run('2', 'challenger'), run('3', 'challenger', 'failed'), run('4', 'B', 'completed', true), run('5', 'C')],
+    search: '', showTrash: false, historyGroupKey: '',
+    config: row => row.request_snapshot.configuration,
+    runTitle: row => row.archive.label || row.request_snapshot.configuration.label,
+    groupKey: row => (row.archive.label || row.request_snapshot.configuration.label).toLowerCase(),
+  }
   context.jobs[0].archive.pinned = true
-  assert.deepEqual(cards.call(context).map(r => r.id), ['1', '5', '2'])
-  context.search = 'a'
-  assert.deepEqual(cards.call(context).map(r => r.id), ['1', '2'])
-  context.search = ''; context.showTrash = true
-  assert.deepEqual(cards.call(context).map(r => r.id), ['4'])
-  context.jobs[3].archive.hidden = false
-  context.showTrash = false
-  assert.deepEqual(cards.call(context).map(r => r.id), ['1','5','4','2'])
+  context.visibleRuns = visibleRuns.call(context)
+  context.runGroups = runGroups.call(context)
+  assert.deepEqual(cards.call(context).map(row => row.id), ['2', '5'])
+  assert.deepEqual(context.runGroups[0].runs.map(row => row.id), ['2', '1'])
+
+  context.historyGroupKey = 'challenger'
+  assert.deepEqual(cards.call(context).map(row => row.id), ['2', '1'])
+
+  context.historyGroupKey = ''
+  context.search = '5'
+  context.visibleRuns = visibleRuns.call(context)
+  context.runGroups = runGroups.call(context)
+  assert.deepEqual(cards.call(context).map(row => row.id), ['5'])
+})
+
+test('dashboard exposes schedule state, pause and removal from each card', () => {
+  assert.match(source, /label="Schedula" @click="openSchedule\(run\)"/)
+  assert.match(source, /scheduleRow\.enabled \? "Attiva" : "In pausa"/)
+  assert.match(source, /api\.patch\(`\/dyn\/simulations\/schedules\/\$\{encodeURIComponent\(this\.scheduleRow\.id\)\}`/)
+  assert.match(source, /api\.delete\(`\/dyn\/simulations\/schedules\/\$\{encodeURIComponent\(this\.scheduleRow\.id\)\}`/)
+  assert.match(source, /run-card-shell--stacked/)
+  assert.match(source, /Chiudi storico/)
 })
 test('daily bar dates omit time while minute dates retain it', () => {
   const match = dataSource.match(/formatBarDate\(value, timeframe\) \{([\s\S]*?)\n    \},/)

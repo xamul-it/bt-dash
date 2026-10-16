@@ -535,8 +535,7 @@
               >{{ String(s.hour).padStart(2, "0") }}:{{
                 String(s.minute).padStart(2, "0")
               }}
-              · {{ s.configuration.strategy }} · {{ s.rolling_days }} giorni di
-              calendario</q-item-label
+              · {{ s.configuration.strategy }} · {{ s.configuration.fromdate }} → oggi</q-item-label
             ><q-item-label v-if="s.last_error" class="text-negative">{{
               s.last_error
             }}</q-item-label
