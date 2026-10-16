@@ -6,6 +6,7 @@ const routes = [
     children: [
       { path: '', component: () => import('src/bt/pages/SimulationDashboard.vue') },
       { path: '/Configure', component: () => import('src/bt/pages/SimulationData.vue')},
+      { path: '/TickerLists', component: () => import('src/bt/pages/TickerLists.vue')},
       { path: '/Benchmark', component: () => import('src/bt/pages/SimulationBenchmarks.vue')},
       { path: '/ExecuteStrategy', component: () => import('src/bt/pages/BacktestingStudio.vue')},
       { path: '/Scheduler', component: () => import('src/bt/pages/Scheduler.vue')},

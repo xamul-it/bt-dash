@@ -1,6 +1,6 @@
 <template>
   <q-page class="q-pa-md">
-    <div class="text-h5">Dati ticker</div>
+    <div class="row items-center"><div class="col text-h5">Dati ticker</div><q-btn flat to="/TickerLists" icon="list" label="Liste ticker" /></div>
     <div class="text-grey-7 q-mb-md">
       Esplora gli storici realmente presenti su disco, con provider, feed,
       copertura e barre OHLCV.
@@ -271,6 +271,10 @@ export default {
   },
   async mounted() {
     try {
+      const query = this.$route.query;
+      if (typeof query.ticker === 'string') this.ticker = query.ticker;
+      if (['yahoo', 'yahoo_adj', 'alpaca'].includes(query.provider)) this.provider = query.provider;
+      if (['sip', 'iex'].includes(query.feed)) this.feed = query.feed;
       this.lists = (
         await api.get("/dyn/simulations/catalog")
       ).data.ticker_lists;

@@ -63,6 +63,11 @@
           </q-item-section>
         </q-item>
 
+        <q-item to="/TickerLists" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar><q-icon name="playlist_add_check" /></q-item-section>
+          <q-item-section><q-item-label>Liste ticker</q-item-label></q-item-section>
+        </q-item>
+
         <q-item to="/Configure" active-class="q-item-no-link-highlighting">
           <q-item-section avatar>
             <q-icon name="build"/>
