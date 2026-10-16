@@ -313,7 +313,8 @@
                 class="col-12"
                 outlined
                 dense
-                label="Benchmark di confronto (facoltativo)"
+                label="Benchmark (vuoto = Buy&Hold degli stessi ticker)"
+                hint="Automatico: stesso provider/feed e periodo, equiponderato, senza leva né ribilanciamento."
                 clearable
                 v-model="form.benchmark"
                 :options="benchmarkOptions"
@@ -605,6 +606,10 @@
             </div>
           </div>
           <equity-curve :points="equityPoints" />
+          <div v-if="selectedRun.result?.benchmark" class="text-caption text-grey-7 q-mt-sm">
+            Benchmark: {{ selectedRun.result.benchmark.automatic ? 'Buy&Hold automatico · equiponderato · senza leva/ribilanciamento' : selectedRun.result.benchmark.source_name }}
+            <span v-if="selectedRun.result.benchmark.first_date"> · {{ selectedRun.result.benchmark.first_date }} → {{ selectedRun.result.benchmark.last_date }}</span>
+          </div>
           <div class="q-gutter-sm q-mt-md">
             <q-btn
               v-if="hasArtifact('stats.html')"
@@ -883,7 +888,7 @@ export default {
     },
     benchmarkOptions() {
       return (this.catalog.benchmarks || [])
-        .filter((b) => !b.hidden)
+        .filter((b) => !b.hidden && b.available !== false)
         .map((b) => ({ label: b.label, value: b.name }));
     },
     visibleParameters() {
@@ -966,6 +971,10 @@ export default {
   },
   async mounted() {
     await this.load();
+    if (this.$route.query.run) {
+      this.tab = "runs";
+      await this.openRun({ id: this.$route.query.run });
+    }
     this.timer = window.setInterval(() => this.poll(), 3000);
   },
   beforeUnmount() {

@@ -104,23 +104,15 @@
     >
       <template #body-cell-available="p"
         ><q-td :props="p"
-          ><q-badge
-            :color="
-              p.row.error ? 'negative' : p.row.available ? 'positive' : 'grey'
-            "
-            >{{
-              p.row.error
-                ? "Errore lettura"
-                : p.row.available
-                  ? "Disponibile"
-                  : "Assente"
-            }}</q-badge
-          >
-          <div v-if="p.row.error" class="text-negative text-caption">
-            {{ p.row.error }}
-          </div></q-td
+          ><q-icon name="circle" size="14px"
+            :color="p.row.error ? 'negative' : p.row.available ? 'positive' : 'orange'"
+            :aria-label="p.row.error ? 'Errore lettura' : p.row.available ? 'Disponibile' : 'Assente'"
+          ><q-tooltip>{{ p.row.error || (p.row.available ? 'Disponibile' : 'Assente') }}</q-tooltip></q-icon></q-td
         ></template
       >
+      <template #body-cell-format="p">
+        <q-td :props="p"><q-icon :name="p.row.format === 'parquet' ? 'view_column' : p.row.format === 'csv' ? 'table_view' : 'help_outline'" size="20px" :aria-label="p.row.format || 'Formato sconosciuto'"><q-tooltip>{{ p.row.format || 'Formato sconosciuto' }}</q-tooltip></q-icon></q-td>
+      </template>
       <template #body-cell-actions="p"
         ><q-td :props="p"
           ><q-btn
@@ -132,6 +124,10 @@
             @click="openBars(p.row)" /></q-td
       ></template>
     </q-table>
+    <div class="row items-center q-gutter-md text-caption text-grey-7 q-mt-sm">
+      <span><q-icon name="view_column" /> Parquet</span><span><q-icon name="table_view" /> CSV</span>
+      <span><q-icon name="circle" color="positive" /> Disponibile</span><span><q-icon name="circle" color="orange" /> Assente</span><span><q-icon name="circle" color="negative" /> Errore di lettura</span>
+    </div>
     <q-dialog v-model="barsDialog" maximized
       ><q-card
         ><q-bar
@@ -197,6 +193,8 @@ export default {
       bars: [],
       selectedSymbol: "",
       selectedSource: "",
+      loadedTimeframe: "daily",
+      barsTimeframe: "daily",
       logDialog: false,
       log: "",
       columns: [
@@ -219,19 +217,21 @@ export default {
           name: "first_bar",
           label: "Prima barra",
           field: "first_bar",
+          format: (v) => this.formatBarDate(v, this.loadedTimeframe),
           align: "left",
         },
         {
           name: "last_bar",
           label: "Ultima barra",
           field: "last_bar",
+          format: (v) => this.formatBarDate(v, this.loadedTimeframe),
           align: "left",
         },
         {
           name: "updated_at",
           label: "File aggiornato",
           field: (r) =>
-            r.updated_at ? new Date(r.updated_at).toLocaleString("it-IT") : "—",
+            r.updated_at ? (this.loadedTimeframe === "daily" ? new Date(r.updated_at).toLocaleDateString("it-IT") : new Date(r.updated_at).toLocaleString("it-IT")) : "—",
           align: "left",
         },
         { name: "actions", label: "Azioni", align: "right" },
@@ -251,6 +251,7 @@ export default {
           field: k,
           align: "left",
           sortable: true,
+          format: (v) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()) ? this.formatBarDate(v, this.barsTimeframe) : v,
         }));
     },
     pricePoints() {
@@ -258,12 +259,12 @@ export default {
         (k) => k.toLowerCase() === "close",
       );
       const dateKey = Object.keys(this.bars[0] || {}).find((k) =>
-        ["date", "timestamp", "datetime", "index"].includes(k.toLowerCase()),
+        ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()),
       );
       if (!key || !this.bars[0]?.[key]) return [];
       const first = Number(this.bars[0][key]);
       return this.bars.map((r) => ({
-        date: String(r[dateKey] || ""),
+        date: this.formatBarDate(r[dateKey], this.barsTimeframe),
         value: Number(r[key]) / first,
       }));
     },
@@ -284,6 +285,11 @@ export default {
     window.clearInterval(this.timer);
   },
   methods: {
+    formatBarDate(value, timeframe) {
+      if (value == null || value === "") return "—";
+      const text = String(value);
+      return timeframe === "daily" ? text.slice(0, 10) : text.replace("T", " ");
+    },
     message(e) {
       return e.response?.data?.error || e.message;
     },
@@ -299,9 +305,11 @@ export default {
       this.loading = true;
       this.error = "";
       try {
+        const params = this.params();
         this.rows = (
-          await api.get("/dyn/simulations/data", { params: this.params() })
+          await api.get("/dyn/simulations/data", { params })
         ).data;
+        this.loadedTimeframe = params.timeframe;
       } catch (e) {
         this.error = this.message(e);
       } finally {
@@ -316,6 +324,7 @@ export default {
           { params: { ...params, limit: 500 } },
         );
         this.bars = data.map((r, i) => ({ ...r, _index: i }));
+        this.barsTimeframe = params.timeframe;
         this.selectedSymbol = row.symbol;
         this.selectedSource = `${params.provider} / ${params.timeframe}${params.provider === "alpaca" ? " / " + params.feed : ""}`;
         this.barsDialog = true;

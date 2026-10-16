@@ -79,62 +79,17 @@
         <template #avatar>
           <q-icon :name="statusIcon" size="2rem" />
         </template>
-        <div class="text-subtitle1">{{ statusHeadline }}</div>
-        <div class="text-caption">{{ statusSubline }}</div>
+        <template v-if="latestActivity">
+          <div class="text-subtitle1">
+            <b>{{ latestActivity.trading_date }}</b>
+            — {{ latestActivity.detail || latestActivity.statusLabel }}
+          </div>
+          <div v-if="isExpandable(latestActivity)" class="text-caption">
+            Apri la riga corrispondente qui sotto per vedere ordini, quantità e stato broker.
+          </div>
+        </template>
+        <div v-else class="text-subtitle1">Nessun run o riconciliazione ancora registrato per questo profilo.</div>
       </q-banner>
-
-      <div class="row q-col-gutter-md q-mb-md">
-        <!-- Cosa è successo oggi / di recente -->
-        <div class="col-12">
-          <q-card flat bordered class="full-height">
-            <q-card-section>
-              <div class="text-subtitle2 text-grey-8">Cosa è successo di recente</div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section>
-              <div v-if="!latestActivity" class="text-grey-6">
-                Nessun run o riconciliazione ancora registrato per questo profilo.
-              </div>
-              <template v-else>
-                <div class="text-body1">
-                  <b>{{ latestActivity.trading_date }}</b>
-                  — {{ latestActivity.detail || latestActivity.statusLabel }}
-                </div>
-                <div v-if="latestActivity.raw && resultDetail(latestActivity.raw)" class="text-caption text-grey-7 q-mt-xs">
-                  {{ resultDetail(latestActivity.raw) }}
-                </div>
-                <div v-if="isExpandable(latestActivity)" class="text-caption text-primary q-mt-xs">
-                  Apri la riga corrispondente qui sotto per vedere ordini, quantità e stato broker.
-                </div>
-              </template>
-              <div v-if="pendingCount" class="q-mt-md">
-                <span class="text-caption text-orange-9">In attesa di riconciliazione:</span>
-                <q-btn v-for="pending in pendingDates" :key="pending.day" flat dense no-caps color="orange-9"
-                  :label="pending.label" @click="goToDay(pending.day)">
-                  <q-tooltip>{{ pending.detail }} · vai alla riga</q-tooltip>
-                </q-btn>
-              </div>
-              <div v-if="historicalEntryIssues.length" class="q-mt-md">
-                <div class="text-caption text-orange-9">Da analizzare nello storico:</div>
-                <q-btn v-for="issue in historicalEntryIssues" :key="issue.day" flat dense no-caps
-                  :color="issue.status === 'error' ? 'negative' : 'orange-9'" :label="`${issue.label} · ${issue.kind}`"
-                  @click="goToDay(issue.day)">
-                  <q-tooltip>{{ issue.detail }} · apri la giornata</q-tooltip>
-                </q-btn>
-                <div class="text-caption text-grey-7 q-mt-xs">
-                  Sono divergenze/esiti da verificare, non errori generici di telemetria. Le più vecchie restano nello storico della tabella.
-                </div>
-              </div>
-              <div v-if="overview.open_guardrail_alerts?.length" class="q-mt-md">
-                <div v-for="alert in overview.open_guardrail_alerts" :key="alert.id" class="text-body2 text-negative">
-                  <q-icon name="warning" size="xs" /> {{ guardrailAlertText(alert) }}
-                </div>
-              </div>
-            </q-card-section>
-          </q-card>
-        </div>
-
-      </div>
 
       <!-- Performance vs storia -->
       <q-card flat bordered class="q-mb-md">
@@ -872,16 +827,17 @@ export default {
       return parts.join(' — ') || 'Nessun dato di riconciliazione ancora disponibile'
     },
     statusIcon() {
-      const h = this.statusHeadline
-      if (h.startsWith('Attenzione') || h.startsWith('Divergenza')) return 'error'
-      if (h.startsWith('Possibile') || h.includes('arretrati')) return 'warning'
-      return 'check_circle'
+      const color = this.latestActivity?.badgeColor
+      if (['positive', 'green'].includes(color)) return 'check_circle'
+      if (['negative', 'red'].includes(color)) return 'error'
+      if (['orange', 'warning'].includes(color)) return 'warning'
+      return 'info'
     },
     statusBannerClass() {
-      const h = this.statusHeadline
-      if (h.startsWith('Attenzione') || h.startsWith('Divergenza')) return 'bg-negative'
-      if (h.startsWith('Possibile') || h.includes('arretrati')) return 'bg-warning text-dark'
-      return 'bg-positive'
+      // Same row and same status as the summary and the table badge.
+      // Historical queues and unrelated checks must not recolor this KPI.
+      const color = this.latestActivity?.badgeColor || 'grey-7'
+      return `bg-${color}${['orange', 'warning'].includes(color) ? ' text-dark' : ''}`
     },
   },
   async mounted() {
