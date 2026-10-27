@@ -94,6 +94,18 @@
             <q-item-label>Scheduler</q-item-label>
           </q-item-section>
         </q-item>
+        <q-item to="/QuoteMonitoring" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar><q-icon name="ssid_chart" /></q-item-section>
+          <q-item-section><q-item-label>Liquidità L1</q-item-label></q-item-section>
+        </q-item>
+        <q-item to="/ProxyAdministration" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar><q-icon name="hub" /></q-item-section>
+          <q-item-section><q-item-label>Amministrazione proxy</q-item-label></q-item-section>
+        </q-item>
+        <q-item to="/RecordedFlows" active-class="q-item-no-link-highlighting">
+          <q-item-section avatar><q-icon name="video_library" /></q-item-section>
+          <q-item-section><q-item-label>Registrazioni flussi</q-item-label></q-item-section>
+        </q-item>
 
         <q-expansion-item
           icon="event_repeat"

@@ -18,6 +18,7 @@
       </div>
     </div>
 
+    <WatchtowerRegistrations :options="coverage.symbols.map(row => row.symbol)" />
     <q-card flat bordered class="q-mb-md">
       <q-card-section class="row q-col-gutter-md items-end">
         <div class="col-12 col-md-3">
@@ -333,9 +334,11 @@ import { computed, defineComponent, onBeforeUnmount, onMounted, ref, watch } fro
 import { useQuasar } from 'quasar'
 import axios from 'axios'
 import { constants } from 'boot/constants'
+import WatchtowerRegistrations from '../components/WatchtowerRegistrations.vue'
 
 export default defineComponent({
   name: 'WatchtowerFeedMonitoring',
+  components: { WatchtowerRegistrations },
 
   setup () {
     const $q = useQuasar()

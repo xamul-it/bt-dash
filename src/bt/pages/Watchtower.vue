@@ -76,6 +76,7 @@
       </div>
     </div>
 
+    <WatchtowerRegistrations />
     <div v-if="selectedPortfolioSummary" class="text-caption text-grey-7 q-mb-md">
       {{ selectedPortfolioSummary }}
     </div>
@@ -578,9 +579,11 @@ import { defineComponent, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import { constants } from 'boot/constants'
 import { Notify } from 'quasar'
+import WatchtowerRegistrations from '../components/WatchtowerRegistrations.vue'
 
 export default defineComponent({
   name: 'WatchtowerPage',
+  components: { WatchtowerRegistrations },
   setup() {
     const runs = ref([])
     const watchtower = ref([])
