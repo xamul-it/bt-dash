@@ -48,3 +48,33 @@ test('opening the monitor falls back to the first profile when live is unavailab
   await makeLoadProfiles({ get: async () => ({ data: [{ profile: 'development' }, { profile: 'challenger' }] }) }).call(ctx)
   assert.equal(ctx.selectedProfile, 'development')
 })
+
+test('cron sends its selected baseline without carrying it into another profile', async () => {
+  let params
+  const ctx = { selectedProfile: 'live', selectedBaselineId: 113, overview: { profile: 'live' } }
+  const load = makeLoad({ get: async (url, options) => {
+    params = options.params
+    return { data: { profile: 'live', baselines: [{ id: 113 }] } }
+  } })
+  await load.call(ctx)
+  assert.equal(params.baseline_id, 113)
+  ctx.selectedProfile = 'development'
+  await load.call(ctx)
+  assert.equal(params.baseline_id, undefined)
+})
+
+test('switching baseline discards late results from the previous selection', async () => {
+  const pending = []
+  const ctx = { selectedProfile: 'live', selectedBaselineId: 1, overview: { profile: 'live' } }
+  const load = makeLoad({ get: () => new Promise(resolve => pending.push(resolve)) })
+  const first = load.call(ctx)
+  ctx.selectedBaselineId = 2
+  const second = load.call(ctx)
+  const newest = { profile: 'live', baselines: [{ id: 1 }, { id: 2 }], reconciliation_statistics: { baseline_id: 2 } }
+  pending[1]({ data: newest })
+  await second
+  pending[0]({ data: { profile: 'live', baselines: [{ id: 1 }] } })
+  await first
+  assert.equal(ctx.selectedBaselineId, 2)
+  assert.equal(ctx.overview, newest)
+})

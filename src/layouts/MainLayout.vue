@@ -41,11 +41,11 @@
     <q-drawer
       v-model="leftDrawerOpen"
       bordered
-      class="bg-primary text-white"
+      class="bg-primary text-white navigation-drawer"
     >
     <!-- show-if-above -->
       <q-list>
-        <q-item to="/" active-class="q-item-no-link-highlighting">
+        <q-item to="/" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="dashboard"/>
           </q-item-section>
@@ -54,7 +54,7 @@
           </q-item-section>
         </q-item>
         
-        <q-item to="/ExecuteStrategy" active-class="q-item-no-link-highlighting">
+        <q-item to="/ExecuteStrategy" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="add_task"/>
           </q-item-section>
@@ -63,12 +63,12 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/TickerLists" active-class="q-item-no-link-highlighting">
+        <q-item to="/TickerLists" active-class="navigation-active">
           <q-item-section avatar><q-icon name="playlist_add_check" /></q-item-section>
           <q-item-section><q-item-label>Liste ticker</q-item-label></q-item-section>
         </q-item>
 
-        <q-item to="/Configure" active-class="q-item-no-link-highlighting">
+        <q-item to="/Configure" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="build"/>
           </q-item-section>
@@ -77,7 +77,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/Benchmark" active-class="q-item-no-link-highlighting">
+        <q-item to="/Benchmark" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="gps_fixed"/>
           </q-item-section>
@@ -86,7 +86,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/Scheduler" active-class="q-item-no-link-highlighting">
+        <q-item to="/Scheduler" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="timer"/>
           </q-item-section>
@@ -94,18 +94,17 @@
             <q-item-label>Scheduler</q-item-label>
           </q-item-section>
         </q-item>
-        <q-item to="/QuoteMonitoring" active-class="q-item-no-link-highlighting">
-          <q-item-section avatar><q-icon name="ssid_chart" /></q-item-section>
-          <q-item-section><q-item-label>Liquidità L1</q-item-label></q-item-section>
+
+        <q-item to="/Services" active-class="navigation-active">
+          <q-item-section avatar><q-icon name="dns" /></q-item-section>
+          <q-item-section><q-item-label>Servizi</q-item-label></q-item-section>
         </q-item>
-        <q-item to="/ProxyAdministration" active-class="q-item-no-link-highlighting">
-          <q-item-section avatar><q-icon name="hub" /></q-item-section>
-          <q-item-section><q-item-label>Amministrazione proxy</q-item-label></q-item-section>
-        </q-item>
-        <q-item to="/RecordedFlows" active-class="q-item-no-link-highlighting">
-          <q-item-section avatar><q-icon name="video_library" /></q-item-section>
-          <q-item-section><q-item-label>Registrazioni flussi</q-item-label></q-item-section>
-        </q-item>
+        <q-expansion-item icon="hub" label="Dati di mercato" :default-opened="$route.path.startsWith('/Zmq')" expand-separator>
+          <q-item to="/Zmq/Recording" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Titoli monitorati</q-item-label></q-item-section></q-item>
+          <q-item to="/Zmq/Monitoring" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Flussi live</q-item-label></q-item-section></q-item>
+          <q-item to="/Zmq/History" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Storico</q-item-label></q-item-section></q-item>
+          <q-item to="/Zmq/Replay" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Replay</q-item-label></q-item-section></q-item>
+        </q-expansion-item>
 
         <q-expansion-item
           icon="event_repeat"
@@ -113,17 +112,17 @@
           :default-opened="isScheduledRoute"
           expand-separator
         >
-          <q-item to="/Watchtower/CronMonitoring" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+          <q-item to="/Watchtower/CronMonitoring" active-class="navigation-active" class="q-pl-xl">
             <q-item-section>
               <q-item-label>Profili Cron</q-item-label>
             </q-item-section>
           </q-item>
-          <q-item to="/ScheduledProfiles/Configuration" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+          <q-item to="/ScheduledProfiles/Configuration" active-class="navigation-active" class="q-pl-xl">
             <q-item-section>
               <q-item-label>Configurazione</q-item-label>
             </q-item-section>
           </q-item>
-          <q-item to="/ScheduledProfiles/Baselines" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+          <q-item to="/ScheduledProfiles/Baselines" active-class="navigation-active" class="q-pl-xl">
             <q-item-section>
               <q-item-label>Gestione baseline</q-item-label>
             </q-item-section>
@@ -136,19 +135,14 @@
           :default-opened="isIntradayRoute"
           expand-separator
         >
-          <q-item to="/Watchtower" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+          <q-item to="/Watchtower" active-class="navigation-active" class="q-pl-xl">
             <q-item-section>
               <q-item-label>Overview</q-item-label>
             </q-item-section>
           </q-item>
-          <q-item to="/Watchtower/FeedMonitoring" active-class="q-item-no-link-highlighting" class="q-pl-xl">
+          <q-item to="/Watchtower/FeedMonitoring" active-class="navigation-active" class="q-pl-xl">
             <q-item-section>
               <q-item-label>Feed Monitoring</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item to="/Watchtower/ServiceMonitoring" active-class="q-item-no-link-highlighting" class="q-pl-xl">
-            <q-item-section>
-              <q-item-label>Service Monitoring</q-item-label>
             </q-item-section>
           </q-item>
         </q-expansion-item>
@@ -156,7 +150,7 @@
         <!-- Riga di separazione -->
         <q-separator />
 
-        <q-item to="/Alpaca" active-class="q-item-no-link-highlighting">
+        <q-item to="/Alpaca" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="account_balance_wallet"/>
           </q-item-section>
@@ -166,7 +160,7 @@
         </q-item>
 
         <div v-if="false">
-        <q-item to="/Dashboard" active-class="q-item-no-link-highlighting">
+        <q-item to="/Dashboard" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="dashboard"/>
           </q-item-section>
@@ -174,7 +168,7 @@
             <q-item-label>Dashboard 21</q-item-label>
           </q-item-section>
         </q-item>
-        <q-item to="/Dashboard2" active-class="q-item-no-link-highlighting">
+        <q-item to="/Dashboard2" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="dashboard"/>
           </q-item-section>
@@ -183,7 +177,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/Directory" active-class="q-item-no-link-highlighting">
+        <q-item to="/Directory" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="card_giftcard"/>
           </q-item-section>
@@ -192,7 +186,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/Charts" active-class="q-item-no-link-highlighting">
+        <q-item to="/Charts" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="insert_chart"/>
           </q-item-section>
@@ -201,7 +195,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/CardHeader" active-class="q-item-no-link-highlighting">
+        <q-item to="/CardHeader" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="card_giftcard"/>
           </q-item-section>
@@ -210,7 +204,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/Cards" active-class="q-item-no-link-highlighting">
+        <q-item to="/Cards" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="card_giftcard"/>
           </q-item-section>
@@ -219,7 +213,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/Tables" active-class="q-item-no-link-highlighting">
+        <q-item to="/Tables" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="table_chart"/>
           </q-item-section>
@@ -228,7 +222,7 @@
           </q-item-section>
         </q-item>
 
-        <q-item to="/Pagination" active-class="q-item-no-link-highlighting">
+        <q-item to="/Pagination" active-class="navigation-active">
           <q-item-section avatar>
             <q-icon name="date_range"/>
           </q-item-section>
@@ -288,6 +282,7 @@ export default defineComponent({
     const isIntradayRoute = computed(
       () => currentPath.value.startsWith('/Watchtower')
         && currentPath.value !== '/Watchtower/CronMonitoring'
+        && currentPath.value !== '/Watchtower/ServiceMonitoring'
     )
 
     const schedulerRunning = ref(false)
@@ -312,3 +307,9 @@ export default defineComponent({
   }
 })
 </script>
+
+<style>
+.navigation-drawer .q-item { color: white; }
+.navigation-drawer .q-item.navigation-active { color: white !important; background: rgba(255, 255, 255, .18); box-shadow: inset 3px 0 #fff; }
+.navigation-drawer .q-expansion-item__toggle-icon { color: white; }
+</style>

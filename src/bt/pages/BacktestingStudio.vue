@@ -1,5 +1,6 @@
 <template>
   <q-page class="q-pa-md studio-page">
+    <div class="studio-navigation">
     <div class="row items-center q-mb-md q-col-gutter-sm">
       <div class="col">
         <div class="text-h5">Laboratorio Backtesting</div>
@@ -9,6 +10,7 @@
         </div>
       </div>
       <div class="col-auto">
+        <q-btn color="primary" icon="add" label="Nuovo run" @click="newRun" />
         <q-btn
           flat
           icon="refresh"
@@ -20,21 +22,16 @@
     </div>
     <q-banner v-if="error" rounded class="bg-red-1 text-red-9 q-mb-md">{{
       error
-    }}</q-banner>
+    }}<template #action><q-btn flat label="Chiudi" @click="error = ''" /></template></q-banner>
     <q-tabs
       v-model="tab"
       align="left"
       active-color="primary"
       class="bg-white rounded-borders q-mb-md"
     >
-      <q-tab name="new" label="Nuova simulazione" icon="science" />
       <q-tab name="runs" label="Risultati e archivio" icon="analytics" />
-      <q-tab
-        name="schedules"
-        label="Simulazioni giornaliere"
-        icon="event_repeat"
-      />
     </q-tabs>
+    </div>
     <div v-if="tab === 'new'" class="row q-col-gutter-md">
       <div class="col-12 col-lg-8">
         <q-card flat bordered class="q-mb-md"
@@ -86,6 +83,20 @@
                 input-debounce="0"
                 new-value-mode="add-unique"
                 hint="Lista oppure simboli separati da virgola, es. NVDA,AVGO,MU"
+              />
+              <q-select
+                class="col-12 col-md-6"
+                outlined
+                dense
+                label="Benchmark"
+                hint="Opzionale. Lascia vuoto per eseguire senza benchmark."
+                clearable
+                v-model="form.benchmark"
+                :options="benchmarkOptions"
+                :loading="loadingBenchmarks"
+                @filter="loadBenchmarkOptions"
+                emit-value
+                map-options
               />
               <q-select
                 class="col-6 col-md-3"
@@ -144,9 +155,10 @@
               v-if="schema.description"
               dense
               label="Descrizione della strategia"
+              default-opened
               class="q-mt-md"
             >
-              <pre class="studio-pre">{{ schema.description }}</pre>
+              <MarkdownNotes class="q-pa-md" :text="schema.description" />
             </q-expansion-item>
           </q-card-section></q-card
         >
@@ -167,12 +179,26 @@
               class="q-mb-md"
               ><template #prepend><q-icon name="search" /></template
             ></q-input>
+            <q-toggle
+              v-model="showUnusedParameters"
+              label="Mostra parametri unused"
+              dense
+              class="q-mb-md"
+            />
             <div v-if="schemaLoading" class="q-pa-md">
               <q-spinner /> Caricamento parametri…
             </div>
-            <div class="row q-col-gutter-md" v-else>
+            <div v-else>
+              <section v-for="group in visibleParameterGroups" :key="group.class_name" class="q-mb-md">
+                <div class="text-subtitle2 q-mb-md">{{ group.class_name }}</div>
+                <div v-for="section in group.sections" :key="section.prefix" class="q-mb-md studio-parameter-section">
+                  <div v-if="section.title" class="row items-center q-mb-sm text-weight-medium">
+                    <span>{{ section.title }}</span>
+                    <ParameterHelp :name="`${group.class_name} · ${section.title}`" :text="section.description" />
+                  </div>
+                <div class="row q-col-gutter-md">
               <div
-                v-for="parameter in visibleParameters"
+                v-for="parameter in section.parameters"
                 :key="parameter.name"
                 class="col-12 col-md-6"
               >
@@ -180,7 +206,9 @@
                   v-if="parameter.type === 'bool'"
                   outlined
                   dense
-                  :label="parameter.name"
+                  :label="parameter.unused ? `${parameter.label} · unused` : parameter.label"
+                  :readonly="parameter.unused"
+                  :class="{ 'studio-parameter-unused': parameter.unused }"
                   :model-value="parameterInputs[parameter.name] ?? ''"
                   emit-value
                   map-options
@@ -193,18 +221,31 @@
                     { label: 'No', value: 'false' },
                   ]"
                   @update:model-value="(v) => setParameter(parameter.name, v)"
-                />
+                >
+                  <template #append>
+                    <ParameterHelp :name="parameter.name" :text="parameter.description" />
+                  </template>
+                </q-select>
                 <q-input
                   v-else
                   outlined
                   dense
-                  :label="parameter.name"
+                  :label="parameter.unused ? `${parameter.label} · unused` : parameter.label"
+                  :readonly="parameter.unused"
+                  :class="{ 'studio-parameter-unused': parameter.unused }"
                   :model-value="parameterInputs[parameter.name] ?? ''"
                   @update:model-value="(v) => setParameter(parameter.name, v)"
                   :hint="`Default: ${JSON.stringify(parameter.default)} · ${parameterType(parameter.type)}`"
-                  clearable
-                />
+                  :clearable="!parameter.unused"
+                >
+                  <template #append>
+                    <ParameterHelp :name="parameter.name" :text="parameter.description" />
+                  </template>
+                </q-input>
               </div>
+            </div>
+                </div>
+              </section>
             </div>
             <q-btn
               v-if="!parameterSearch && schema.parameters?.length > 12"
@@ -308,18 +349,6 @@
                 max="0.5"
                 step="0.0001"
                 hint="0.001 = 0.1%"
-              />
-              <q-select
-                class="col-12"
-                outlined
-                dense
-                label="Benchmark (vuoto = Buy&Hold degli stessi ticker)"
-                hint="Automatico: stesso provider/feed e periodo, equiponderato, senza leva né ribilanciamento."
-                clearable
-                v-model="form.benchmark"
-                :options="benchmarkOptions"
-                emit-value
-                map-options
               />
             </div>
             <q-expansion-item
@@ -426,44 +455,71 @@
           v-model="search"
           label="Cerca nome, strategia o stato"
           ><template #prepend><q-icon name="search" /></template></q-input
-        ><q-toggle v-model="pinnedOnly" label="Solo preferiti" /><q-toggle
+        >
+        <q-select
+          class="col-12 col-sm-3 col-md-2"
+          outlined
+          dense
+          clearable
+          v-model="leverageFilter"
+          :options="leverageOptions"
+          label="Leva"
+        />
+        <q-toggle v-model="pinnedOnly" label="Solo preferiti" /><q-toggle
           v-model="showHidden"
-          label="Mostra nascosti"
+          label="Mostra archiviati"
         />
       </div>
+      <div class="row items-center q-gutter-sm q-mb-sm"><q-btn color="primary" icon="compare_arrows" label="Confronta parametri" :disable="comparisonSelection.length !== 2" @click="comparisonOpen = true" /><span>{{ comparisonSelection.length }}/2 run selezionati</span><q-btn v-if="comparisonSelection.length" flat label="Azzera selezione" @click="comparisonSelection = []" /></div>
       <q-table
+        selection="multiple"
+        v-model:selected="comparisonSelection"
         flat
         bordered
+        class="studio-runs"
+        :grid="$q.screen.lt.sm"
         :rows="filteredRuns"
         :columns="runColumns"
         row-key="id"
         :pagination="{ rowsPerPage: 25 }"
         :loading="loading"
-        no-data-label="Nessuna simulazione. Crea il primo run dalla scheda Nuova simulazione."
+        no-data-label="Nessuna simulazione. Crea il primo run con il pulsante Nuovo run."
       >
+        <template #header-selection><span class="text-caption">Confronta</span></template>
+        <template #body-selection="p"><span class="row inline items-center no-wrap"><q-checkbox :model-value="p.selected" :disable="!p.selected && comparisonSelection.length >= 2" :aria-label="`Seleziona ${runLabel(p.row)} per confronto`" @update:model-value="p.selected = $event" /><span v-if="p.selected" class="comparison-number" :aria-label="`Run ${comparisonNumber(p.row)} del confronto`">{{ comparisonNumber(p.row) }}</span></span></template>
         <template #body-cell-label="p"
           ><q-td :props="p"
-            ><div>{{ runLabel(p.row) }}</div>
+            ><div class="row items-center no-wrap q-gutter-xs">
+              <span>{{ runLabel(p.row) }}</span>
+              <q-btn v-if="p.row.archive?.notes?.trim()" flat round dense size="sm"
+                icon="info_outline" color="primary" aria-label="Note del run">
+                <q-tooltip class="bg-white text-dark shadow-3 q-pa-md" style="max-width: 420px; max-height: 60vh; overflow: auto">
+                  <MarkdownNotes :text="p.row.archive.notes" />
+                </q-tooltip>
+                <q-menu><div class="q-pa-md" style="width: 420px; max-width: 85vw; max-height: 60vh; overflow: auto">
+                  <MarkdownNotes :text="p.row.archive.notes" />
+                </div></q-menu>
+              </q-btn>
+            </div>
             <div class="text-caption text-grey-7">
               {{
                 p.row.request_snapshot?.configuration?.strategy ||
                 "Aggiornamento dati"
               }}
+              <ParameterHelp name="Override del run" :text="runOverrides(p.row)" />
               · {{ p.row.request_snapshot?.configuration?.provider }}
             </div></q-td
           ></template
         >
+        <template #body-cell-created="p">
+          <q-td :props="p"><div>{{ dateTime(p.row.created_at).split(",")[0] }}</div><div class="text-caption">{{ dateTime(p.row.created_at).split(",").slice(1).join(",").trim() }}</div></q-td>
+        </template>
+        <template #body-cell-period="p">
+          <q-td :props="p"><div>{{ p.row.request_snapshot?.configuration?.fromdate || '—' }}</div><div>{{ p.row.request_snapshot?.configuration?.todate || '—' }}</div></q-td>
+        </template>
         <template #body-cell-status="p"
           ><q-td :props="p"
-            ><q-badge :color="statusColor(p.row.status)">{{
-              statusLabel(p.row.status)
-            }}</q-badge>
-            <div
-              v-if="p.row.error"
-              class="text-caption text-negative studio-error"
-            >
-              {{ p.row.error }}
-            </div></q-td
+            ><q-icon name="circle" size="16px" :color="statusColor(p.row.status)" :aria-label="statusLabel(p.row.status)" tabindex="0"><q-tooltip>{{ statusLabel(p.row.status) }}<template v-if="p.row.error"> · {{ p.row.error }}</template></q-tooltip></q-icon></q-td
           ></template
         >
         <template #body-cell-actions="p"
@@ -471,14 +527,15 @@
             ><q-btn
               flat
               dense
-              no-caps
-              label="Apri"
+              round
+              aria-label="Apri"
               icon="visibility"
-              @click="openRun(p.row)" /><q-btn
+              @click="openRun(p.row)"><q-tooltip>Apri</q-tooltip></q-btn><q-btn
               flat
               dense
               round
               icon="content_copy"
+              aria-label="Duplica configurazione"
               @click="cloneRun(p.row)"
               ><q-tooltip>Duplica configurazione</q-tooltip></q-btn
             ><q-btn
@@ -487,73 +544,127 @@
               dense
               round
               :icon="p.row.archive?.pinned ? 'star' : 'star_border'"
+              :aria-label="p.row.archive?.pinned ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'"
               @click="
                 archiveRun(p.row, { pinned: !p.row.archive?.pinned })
-              " /></q-td
+              "><q-tooltip>{{ p.row.archive?.pinned ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti' }}</q-tooltip></q-btn>
+            <q-btn v-if="p.row.done" flat dense round
+              :icon="p.row.archive?.hidden ? 'unarchive' : 'archive'"
+              :aria-label="p.row.archive?.hidden ? 'Ripristina' : 'Archivia'"
+              @click="archiveRun(p.row, { hidden: !p.row.archive?.hidden })">
+              <q-tooltip>{{ p.row.archive?.hidden ? 'Ripristina' : 'Archivia' }}</q-tooltip></q-btn>
+            <q-btn v-if="p.row.request_snapshot?.configuration?.strategy" flat dense round icon="schedule" aria-label="Schedula" @click="openSchedule(p.row)"><q-tooltip>Schedula</q-tooltip></q-btn>
+            <q-btn v-if="p.row.done" flat dense round color="negative" icon="delete_outline"
+              aria-label="Cancella" @click="deleteRun(p.row)"><q-tooltip>Cancella</q-tooltip></q-btn>
+            </q-td
         ></template>
+        <template #item="p">
+          <div class="col-12 q-mb-sm">
+            <q-card flat bordered class="q-pa-md studio-run-card">
+              <div class="row items-center no-wrap q-gutter-sm">
+                <span class="row inline items-center no-wrap"><q-checkbox :model-value="p.selected" :disable="!p.selected && comparisonSelection.length >= 2" :aria-label="`Seleziona ${runLabel(p.row)} per confronto`" @update:model-value="p.selected = $event" /><span v-if="p.selected" class="comparison-number" :aria-label="`Run ${comparisonNumber(p.row)} del confronto`">{{ comparisonNumber(p.row) }}</span></span><div class="col text-weight-bold" style="overflow-wrap: anywhere">{{ runLabel(p.row) }}</div>
+                <q-icon name="circle" size="16px" :color="statusColor(p.row.status)" :aria-label="statusLabel(p.row.status)" tabindex="0"><q-tooltip>{{ statusLabel(p.row.status) }} {{ p.row.error || '' }}</q-tooltip></q-icon>
+              </div>
+              <div class="text-caption text-grey-7" style="overflow-wrap: anywhere">{{ p.row.request_snapshot?.configuration?.strategy }} <ParameterHelp name="Override del run" :text="runOverrides(p.row)" /></div>
+              <div class="row q-my-sm text-caption">
+                <div class="col-6">Avvio<div>{{ dateTime(p.row.created_at).split(',')[0] }}</div><div>{{ dateTime(p.row.created_at).split(',').slice(1).join(',').trim() }}</div></div>
+                <div class="col-6">Periodo simulato<div>{{ p.row.request_snapshot?.configuration?.fromdate || '—' }}</div><div>{{ p.row.request_snapshot?.configuration?.todate || '—' }}</div></div>
+              </div>
+              <div class="text-caption q-mb-sm">Rendimento {{ percent(p.row.result?.performance?.total_return_pct) }} · Sharpe {{ formatTradeNumber(p.row.result?.performance?.sharpe, 3) }} · Sortino {{ formatTradeNumber(p.row.result?.performance?.sortino, 3) }} · Volatilità {{ percent(p.row.result?.performance?.volatility_pct) }} · Medio/trade {{ percent(p.row.result?.performance?.average_trade_return_pct) }} · Max DD {{ percent(p.row.result?.performance?.max_drawdown_pct) }} · Leva {{ p.row.request_snapshot?.configuration?.broker?.margin_leverage ?? "—" }}</div>
+              <div class="row justify-end">
+              <q-btn v-if="p.row.archive?.notes?.trim()" flat round dense size="sm"
+                icon="info_outline" color="primary" aria-label="Note del run">
+                <q-tooltip class="bg-white text-dark shadow-3 q-pa-md" style="max-width: 420px; max-height: 60vh; overflow: auto">
+                  <MarkdownNotes :text="p.row.archive.notes" />
+                </q-tooltip>
+                <q-menu><div class="q-pa-md" style="width: 420px; max-width: 85vw; max-height: 60vh; overflow: auto">
+                  <MarkdownNotes :text="p.row.archive.notes" />
+                </div></q-menu>
+              </q-btn>
+              <q-btn
+              flat
+              dense
+              round
+              aria-label="Apri"
+              icon="visibility"
+              @click="openRun(p.row)"><q-tooltip>Apri</q-tooltip></q-btn><q-btn
+              flat
+              dense
+              round
+              icon="content_copy"
+              aria-label="Duplica configurazione"
+              @click="cloneRun(p.row)"
+              ><q-tooltip>Duplica configurazione</q-tooltip></q-btn
+            ><q-btn
+              v-if="p.row.done"
+              flat
+              dense
+              round
+              :icon="p.row.archive?.pinned ? 'star' : 'star_border'"
+              :aria-label="p.row.archive?.pinned ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'"
+              @click="
+                archiveRun(p.row, { pinned: !p.row.archive?.pinned })
+              "><q-tooltip>{{ p.row.archive?.pinned ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti' }}</q-tooltip></q-btn>
+            <q-btn v-if="p.row.done" flat dense round
+              :icon="p.row.archive?.hidden ? 'unarchive' : 'archive'"
+              :aria-label="p.row.archive?.hidden ? 'Ripristina' : 'Archivia'"
+              @click="archiveRun(p.row, { hidden: !p.row.archive?.hidden })">
+              <q-tooltip>{{ p.row.archive?.hidden ? 'Ripristina' : 'Archivia' }}</q-tooltip></q-btn>
+            <q-btn v-if="p.row.request_snapshot?.configuration?.strategy" flat dense round icon="schedule" aria-label="Schedula" @click="openSchedule(p.row)"><q-tooltip>Schedula</q-tooltip></q-btn>
+            <q-btn v-if="p.row.done" flat dense round color="negative" icon="delete_outline"
+              aria-label="Cancella" @click="deleteRun(p.row)"><q-tooltip>Cancella</q-tooltip></q-btn>
+
+              </div>
+            </q-card>
+          </div>
+        </template>
       </q-table>
     </template>
-    <template v-if="tab === 'schedules'">
-      <q-banner class="bg-blue-1 q-mb-md" rounded
-        >Simulazioni giornaliere su storico locale, fuso Europe/Rome.
-        L’intervallo scorre mantenendo la durata della configurazione. Per dati
-        nuovi, aggiorna lo storico separatamente.</q-banner
-      >
-      <q-card flat bordered class="q-mb-md"
-        ><q-card-section class="row q-col-gutter-md items-center">
-          <div class="col-12">
-            Pianifica la configurazione della scheda Nuova simulazione
+    <q-dialog v-model="scheduleDialog" persistent>
+      <q-card style="width: 560px; max-width: 95vw">
+        <q-card-section class="row items-start">
+          <div>
+            <div class="text-h6">Schedulazione — {{ scheduleRun ? runLabel(scheduleRun) : "" }}</div>
+            <div class="text-caption text-grey-7">
+              Ogni esecuzione mantiene la data iniziale e imposta la data finale al giorno corrente.
+              Il nuovo risultato diventa la card principale; i precedenti restano nello storico.
+            </div>
           </div>
-          <q-input
-            class="col"
-            outlined
-            dense
-            v-model="scheduleLabel"
-            label="Nome pianificazione"
-          />
-          <q-input
-            class="col-auto"
-            outlined
-            dense
-            type="time"
-            v-model="scheduleTime"
-            label="Ora Europe/Rome"
-          />
-          <q-btn
-            class="col-auto"
-            color="primary"
-            label="Crea pianificazione"
-            @click="createSchedule"
-            :loading="submitting"
-          /> </q-card-section
-      ></q-card>
-      <q-list bordered separator class="bg-white"
-        ><q-item v-for="s in schedules" :key="s.id"
-          ><q-item-section
-            ><q-item-label>{{ s.label }}</q-item-label
-            ><q-item-label caption
-              >{{ String(s.hour).padStart(2, "0") }}:{{
-                String(s.minute).padStart(2, "0")
-              }}
-              · {{ s.configuration.strategy }} · {{ s.configuration.fromdate }} → oggi</q-item-label
-            ><q-item-label v-if="s.last_error" class="text-negative">{{
-              s.last_error
-            }}</q-item-label
-            ><q-item-label v-if="s.last_job_id" caption
-              >Ultimo run: {{ s.last_job_id }}</q-item-label
-            ></q-item-section
-          ><q-item-section side
-            ><q-toggle
-              :model-value="s.enabled"
-              @update:model-value="(v) => toggleSchedule(s, v)"
-              label="Attiva" /></q-item-section></q-item
-      ></q-list>
-    </template>
+          <q-space />
+          <q-badge v-if="scheduleRow" :color="scheduleRow.enabled ? 'positive' : 'orange-8'">
+            {{ scheduleRow.enabled ? "Attiva" : "In pausa" }}
+          </q-badge>
+        </q-card-section>
+        <q-separator />
+        <q-card-section>
+          <q-input v-model="scheduleTime" type="time" outlined dense label="Ora giornaliera · Europe/Rome"
+            :rules="[value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value) || 'Ora non valida']" />
+          <q-toggle v-model="scheduleEnabled" label="Pianificazione attiva" />
+          <div class="text-body2 q-mt-md">
+            Periodo: <b>{{ scheduleRun?.request_snapshot?.configuration?.fromdate }}</b> → <b>oggi</b>
+          </div>
+          <template v-if="scheduleRow">
+            <div class="text-caption text-grey-7 q-mt-sm">Prossima esecuzione: {{ dateTime(scheduleRow.next_run_at) }}</div>
+            <div class="text-caption text-grey-7">Ultimo avvio: {{ dateTime(scheduleRow.last_triggered_at) }}</div>
+            <div v-if="scheduleRow.last_error" class="text-caption text-negative q-mt-xs">{{ scheduleRow.last_error }}</div>
+          </template>
+        </q-card-section>
+        <q-card-actions align="between">
+          <q-btn v-if="scheduleRow" flat color="negative" icon="delete" label="Rimuovi"
+            :loading="scheduleSaving" @click="removeSchedule" />
+          <q-space v-else />
+          <div>
+            <q-btn flat label="Annulla" :disable="scheduleSaving" v-close-popup />
+            <q-btn color="primary" icon="save" label="Salva" :loading="scheduleSaving" @click="saveSchedule" />
+          </div>
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
     <q-dialog v-model="detailOpen" maximized
       ><q-card v-if="selectedRun">
         <q-bar
           ><div>{{ runLabel(selectedRun) }}</div>
-          <q-space /><q-btn
+          <q-space /><q-btn flat dense icon="add" label="Nuovo run" @click="newRun" /><q-btn
             flat
             dense
             icon="refresh"
@@ -561,6 +672,7 @@
             flat
             dense
             icon="close"
+            aria-label="Chiudi dettaglio run"
             v-close-popup
         /></q-bar>
         <q-card-section class="q-pb-none"
@@ -604,9 +716,13 @@
               >
             </div>
           </div>
-          <equity-curve :points="equityPoints" />
+          <equity-curve
+            :points="equityPoints"
+            :comparison-points="benchmarkPoints"
+            :drawdown-points="drawdownPoints"
+          />
           <div v-if="selectedRun.result?.benchmark" class="text-caption text-grey-7 q-mt-sm">
-            Benchmark: {{ selectedRun.result.benchmark.automatic ? 'Buy&Hold automatico · equiponderato · senza leva/ribilanciamento' : selectedRun.result.benchmark.source_name }}
+            Benchmark: <q-btn flat dense no-caps color="primary" :label="selectedBenchmarkLabel" @click="benchmarkOpen = true" />
             <span v-if="selectedRun.result.benchmark.first_date"> · {{ selectedRun.result.benchmark.first_date }} → {{ selectedRun.result.benchmark.last_date }}</span>
           </div>
           <div class="q-gutter-sm q-mt-md">
@@ -617,9 +733,7 @@
               no-caps
               icon="open_in_new"
               label="stats.html"
-              :href="artifactUrl('stats.html')"
-              target="_blank"
-              rel="noopener noreferrer"
+              @click="statsOpen = true"
             />
             <q-btn
               v-if="hasArtifact('returns.csv')"
@@ -644,7 +758,7 @@
               :label="
                 selectedRun.archive?.hidden
                   ? 'Ripristina in elenco'
-                  : 'Nascondi dall’elenco'
+                  : 'Archivia'
               "
               @click="
                 archiveRun(selectedRun, {
@@ -654,7 +768,7 @@
             />
           </div>
           <div v-if="selectedRun.archive?.notes" class="q-mt-md">
-            {{ selectedRun.archive.notes }}
+            <MarkdownNotes :text="selectedRun.archive.notes" />
           </div>
           <div class="q-mt-md text-subtitle2">Artefatti disponibili</div>
           <div class="q-gutter-sm">
@@ -671,20 +785,42 @@
               rel="noopener noreferrer"
             />
           </div>
+          <RunDiagnostics v-if="selectedRun" :key="selectedRun.id" :run="selectedRun" :endpoint="simulationEndpoint" />
           <div v-if="!selectedRun.done" class="text-grey-7 q-mt-md">
             Calcolo in corso: risultati e report compariranno al termine. Il
             monitoraggio continua riaprendo la pagina.
           </div>
         </q-card-section>
         <q-card-section v-if="detailTab === 'trades'"
-          ><q-table
+          ><div class="row items-center justify-between q-gutter-sm q-mb-sm">
+            <div class="text-caption text-grey-7">
+              Per le strategie minute, la durata mostra ore:minuti e tra
+              parentesi il conteggio delle barre.
+            </div>
+            <q-btn
+              outline
+              dense
+              no-caps
+              color="primary"
+              icon="table_view"
+              label="Esporta Excel"
+              :loading="exportingTrades"
+              :disable="!tradeTotal"
+              @click="exportTrades"
+            />
+          </div>
+          <q-table
+            class="trade-table"
             flat
             bordered
+            :grid="$q.screen.lt.md"
             :rows="tradeRows"
             :columns="tradeColumns"
             row-key="_index"
             :pagination="{ rowsPerPage: 0 }"
-            hide-bottom />
+            hide-bottom>
+            <template #item="p"><div class="col-12 col-sm-6 q-pa-xs"><q-card flat bordered class="q-pa-sm"><div class="row q-col-gutter-sm"><div v-for="column in p.cols" :key="column.name" class="col-6 trade-value"><div class="text-caption text-grey-7">{{ column.label }}</div><div>{{ column.value }}</div></div></div></q-card></div></template>
+          </q-table>
           <div class="row justify-between q-mt-sm">
             <q-btn
               flat
@@ -706,7 +842,12 @@
             /></div
         ></q-card-section>
         <q-card-section v-if="detailTab === 'params'"
-          ><div class="text-subtitle2">
+          ><div v-for="group in runParameterGroups" :key="group.label" class="q-mb-md">
+            <div class="text-subtitle1 q-mb-sm">{{ group.label }}</div>
+            <div class="row q-col-gutter-sm"><div v-for="field in group.fields" :key="field.key" class="col-12 col-sm-6 col-lg-4 trade-value"><span class="text-grey-7">{{ field.key }}</span><div>{{ displayValue(field.value) }}</div></div></div>
+          </div>
+          <q-expansion-item label="Configurazione raw e risultati effettivi">
+          <div class="text-subtitle2">
             Configurazione richiesta (congelata)
           </div>
           <pre class="studio-pre">{{
@@ -720,6 +861,7 @@
               2,
             )
           }}</pre>
+          </q-expansion-item>
         </q-card-section>
         <q-card-section v-if="detailTab === 'log'"
           ><q-btn flat label="Aggiorna log" icon="refresh" @click="loadLog" />
@@ -729,13 +871,42 @@
         </q-card-section>
       </q-card></q-dialog
     >
+    <q-dialog v-model="comparisonOpen"><q-card style="width: 1100px; max-width: 96vw"><q-bar><div>Differenze parametri</div><q-space /><q-btn flat icon="close" aria-label="Chiudi confronto" v-close-popup /></q-bar><q-card-section>
+      <q-markup-table flat bordered wrap-cells class="comparison-table"><thead><tr><th>Campo</th><th><span class="comparison-number q-mr-xs">1</span>{{ runLabel(comparisonSelection[0] || {}) }}</th><th><span class="comparison-number q-mr-xs">2</span>{{ runLabel(comparisonSelection[1] || {}) }}</th></tr></thead><tbody><tr v-for="row in comparisonRows" :key="row.key" class="bg-amber-2 text-dark"><td>{{ row.key }}</td><td>{{ row.left }}</td><td>{{ row.right }}</td></tr></tbody></q-markup-table>
+      <div v-if="!comparisonRows.length" class="q-pa-md">Nessuna differenza nei parametri salvati.</div>
+    </q-card-section></q-card></q-dialog>
+    <q-dialog v-model="statsOpen" maximized><q-card class="column no-wrap"><q-bar><div>Report stats</div><q-space /><q-btn flat icon="close" aria-label="Chiudi report" v-close-popup /></q-bar><iframe v-if="statsOpen && selectedRun" :src="artifactUrl('stats.html')" title="Report statistiche" sandbox="allow-scripts allow-same-origin" style="border: 0; width: 100%; flex: 1" /></q-card></q-dialog>
+    <q-dialog v-model="benchmarkOpen"><q-card style="width: 720px; max-width: 95vw"><q-bar><div>{{ selectedBenchmarkLabel }}</div><q-space /><q-btn flat icon="close" v-close-popup /></q-bar><q-card-section><equity-curve :points="benchmarkPoints" /><pre class="studio-pre">{{ JSON.stringify(selectedRun?.result?.benchmark, null, 2) }}</pre></q-card-section></q-card></q-dialog>
+    <q-dialog v-model="notesDialog" persistent>
+      <q-card style="width: 760px; max-width: 95vw">
+        <q-card-section class="text-h6">Nome e note</q-card-section>
+        <q-card-section class="q-pt-none q-gutter-md">
+          <q-input v-model="notesForm.label" outlined dense label="Nome simulazione" maxlength="160" />
+          <q-input v-model="notesForm.notes" outlined type="textarea" label="Note (Markdown)"
+            hint="Supporta titoli, grassetto, elenchi, link e tabelle." maxlength="2000" counter autogrow />
+          <div v-if="notesForm.notes.trim()">
+            <div class="text-caption text-grey-7 q-mb-sm">Anteprima</div>
+            <MarkdownNotes :text="notesForm.notes" />
+          </div>
+          <div v-if="notesError" class="text-negative" role="alert">{{ notesError }}</div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Annulla" :disable="savingNotes" v-close-popup />
+          <q-btn color="primary" label="Salva" :loading="savingNotes" @click="saveRunNotes" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script>
+import RunDiagnostics from "../components/RunDiagnostics.vue";
 import { api } from "boot/axios";
 import { constants } from "boot/constants";
 import EquityCurve from "../components/EquityCurve.vue";
+import ParameterHelp from "../components/ParameterHelp.vue";
+import MarkdownNotes from "../components/MarkdownNotes.vue";
+import { strategyDocumentation, parameterSections } from "../utils/strategyDocumentation.mjs";
 
 const endpoint = "/dyn/simulations";
 const defaults = () => ({
@@ -771,12 +942,13 @@ const defaults = () => ({
   },
 });
 export default {
-  components: { EquityCurve },
-  props: { initialTab: { type: String, default: "new" } },
+  components: { EquityCurve, ParameterHelp, MarkdownNotes, RunDiagnostics },
+  props: { initialTab: { type: String, default: "runs" } },
   data() {
     return {
       tab: this.initialTab,
       catalog: {},
+      loadingBenchmarks: false,
       strategyOptions: [],
       schema: {},
       form: defaults(),
@@ -784,9 +956,13 @@ export default {
       parameterInputs: {},
       parameterSearch: "",
       showAllParameters: false,
+      showUnusedParameters: false,
       schemaVersion: 0,
       schemaLoading: false,
       error: "",
+      networkError: "",
+      comparisonSelection: [], comparisonOpen: false,
+      statsOpen: false, benchmarkOpen: false,
       loading: false,
       validating: false,
       submitting: false,
@@ -796,18 +972,30 @@ export default {
       timer: null,
       polling: false,
       search: "",
+      leverageFilter: null,
       pinnedOnly: false,
       showHidden: false,
       scheduleTime: "20:00",
-      scheduleLabel: "",
+      scheduleDialog: false,
+      scheduleRun: null,
+      scheduleRow: null,
+      scheduleEnabled: true,
+      scheduleSaving: false,
+      notesDialog: false,
+      notesForm: { id: null, label: "", notes: "" },
+      notesError: "",
+      savingNotes: false,
       detailOpen: false,
       detailTab: "summary",
       selectedRun: null,
       equityPoints: [],
+      benchmarkPoints: [],
+      drawdownPoints: [],
       logText: "",
       tradeRows: [],
       tradePage: 1,
       tradeTotal: 0,
+      exportingTrades: false,
       brokerFlags: [
         { key: "broker_coc", label: "Cheat-on-close (COC)" },
         { key: "broker_coo", label: "Cheat-on-open (COO)" },
@@ -828,7 +1016,8 @@ export default {
         {
           name: "created",
           label: "Avvio",
-          field: (r) => this.dateTime(r.created_at),
+          field: (r) => r.created_at ? new Date(r.created_at).getTime() : null,
+          sortable: true,
           align: "left",
         },
         {
@@ -849,14 +1038,33 @@ export default {
         {
           name: "return",
           label: "Rendimento",
-          field: (r) => this.percent(r.result?.performance?.total_return_pct),
+          field: (r) => r.result?.performance?.total_return_pct ?? null,
+          format: (value) => this.percent(value),
+          sortable: true,
           align: "right",
         },
+        {
+          name: "max_drawdown",
+          label: "Max DD",
+          field: (r) => r.result?.performance?.max_drawdown_pct ?? null,
+          format: (value) => this.percent(value),
+          align: "right",
+          sortable: true,
+        },
+        { name: "sharpe", label: "Sharpe", field: r => r.result?.performance?.sharpe ?? null,
+          format: value => this.formatTradeNumber(value, 3), align: "right", sortable: true },
+        { name: "sortino", label: "Sortino", field: r => r.result?.performance?.sortino ?? null,
+          format: value => this.formatTradeNumber(value, 3), align: "right", sortable: true },
+        { name: "volatility", label: "Volatilità annua", field: r => r.result?.performance?.volatility_pct ?? null,
+          format: value => this.percent(value), align: "right", sortable: true },
+        { name: "average_trade_return", label: "Rendimento medio / trade", field: r => r.result?.performance?.average_trade_return_pct ?? null,
+          format: value => this.percent(value), align: "right", sortable: true },
         { name: "actions", label: "Azioni", align: "right" },
       ],
     };
   },
   computed: {
+    simulationEndpoint() { return endpoint; },
     archiveCards() {
       const runs = this.jobs.filter(
         (r) => r.kind === "simulation" && !r.archive?.hidden,
@@ -885,6 +1093,25 @@ export default {
         },
       ];
     },
+    comparisonRows() {
+      const config = row => {
+        const { label, notes, ...values } = row?.request_snapshot?.configuration || {};
+        return this.flattenConfig(values);
+      };
+      const left = config(this.jobs.find(r => r.id === this.comparisonSelection[0]?.id));
+      const right = config(this.jobs.find(r => r.id === this.comparisonSelection[1]?.id));
+      return [...new Set([...Object.keys(left), ...Object.keys(right)])].sort().filter(key => JSON.stringify(left[key]) !== JSON.stringify(right[key])).map(key => ({ key, left: this.displayValue(left[key]), right: this.displayValue(right[key]) }));
+    },
+    runParameterGroups() {
+      const config = this.selectedRun?.request_snapshot?.configuration || {};
+      const { parameters = {}, broker = {}, ...general } = config;
+      return [{ label: 'Strategia e dati', values: general }, { label: 'Broker e costi', values: broker }, { label: 'Parametri strategia · override richiesti', values: parameters }].map(g => ({ label: g.label, fields: Object.entries(g.values).map(([key, value]) => ({ key, value })) }));
+    },
+    selectedBenchmarkLabel() {
+      const b = this.selectedRun?.result?.benchmark || {};
+      const name = b.source_name || this.selectedRun?.request_snapshot?.configuration?.benchmark;
+      return b.automatic ? 'Buy&Hold automatico · equiponderato' : (this.catalog.benchmarks || []).find(item => item.name === name)?.label || b.label || name || 'Benchmark';
+    },
     benchmarkOptions() {
       return (this.catalog.benchmarks || [])
         .filter((b) => !b.hidden && b.available !== false)
@@ -909,18 +1136,42 @@ export default {
         )
         .filter(
           (p) =>
-            !this.parameterSearch ||
-            p.name.toLowerCase().includes(this.parameterSearch.toLowerCase()),
+            (this.showUnusedParameters || !p.unused) &&
+            (!this.parameterSearch ||
+            p.name.toLowerCase().includes(this.parameterSearch.toLowerCase())),
         );
       return !this.parameterSearch && !this.showAllParameters
         ? p.slice(0, 12)
         : p;
     },
+    visibleParameterGroups() {
+      const names = new Set(this.visibleParameters.map(p => p.name));
+      const groups = this.schema.parameter_groups?.length ? this.schema.parameter_groups : [{ class_name: this.form.strategy, parameters: this.schema.parameters || [] }];
+      return groups.map(group => {
+        // Group before filtering so searches and the initial limit keep their section.
+        const sections = parameterSections(group).map(section => ({ ...section,
+          parameters: section.parameters.filter(p => names.has(p.name)),
+        })).filter(section => section.parameters.length);
+        return { ...group, sections };
+      }).filter(group => group.sections.length);
+    },
+    leverageOptions() {
+      return [...new Set(this.jobs
+        .filter(r => r.kind === "simulation" && !r.archive?.deleted_at)
+        .map(r => r.request_snapshot?.configuration?.broker?.margin_leverage)
+        .filter(value => value != null && value !== "" && Number.isFinite(Number(value)))
+        .map(Number))].sort((a, b) => a - b);
+    },
     filteredRuns() {
       return this.jobs.filter(
         (r) =>
+          r.kind === "simulation" &&
+          !r.archive?.deleted_at &&
           (this.showHidden || !r.archive?.hidden) &&
           (!this.pinnedOnly || r.archive?.pinned) &&
+          (this.leverageFilter == null ||
+            (r.request_snapshot?.configuration?.broker?.margin_leverage != null &&
+              Number(r.request_snapshot.configuration.broker.margin_leverage) === this.leverageFilter)) &&
           JSON.stringify([
             this.runLabel(r),
             r.request_snapshot?.configuration?.strategy,
@@ -930,15 +1181,78 @@ export default {
             .includes(this.search.toLowerCase()),
       );
     },
+    tradeTimeframe() {
+      return (
+        this.selectedRun?.request_snapshot?.configuration?.timeframe || "daily"
+      );
+    },
     tradeColumns() {
-      const keys = [...new Set(this.tradeRows.flatMap((r) => Object.keys(r)))]
-        .filter((k) => k !== "_index")
-        .slice(0, 16);
-      return keys.map((k) => ({
+      const keys = [
+        ...new Set(this.tradeRows.flatMap((r) => Object.keys(r))),
+      ].filter((k) => k !== "_index");
+      const gainKey = ["pct_gain", "pnl_pct", "pnl_percent"].find((key) =>
+        keys.includes(key),
+      );
+      const priority = [
+        "asset",
+        "entry_side",
+        "open_datetime",
+        "close_datetime",
+        gainKey,
+        "entry_signal_dt",
+        "exit_signal_dt",
+      ].filter(Boolean);
+      const orderedKeys = [
+        ...priority.filter((key) => keys.includes(key)),
+        ...keys.filter(
+          (key) => !priority.includes(key) && key !== "duration_bars",
+        ),
+        ...(keys.includes("duration_bars") ? ["duration_bars"] : []),
+      ];
+      const labels = {
+        open_datetime: "Data ingresso",
+        close_datetime: "Data uscita",
+        pct_gain: "Gain %",
+        pnl_pct: "Gain %",
+        pnl_percent: "Gain %",
+        entry_signal_dt: "Segnale ingresso",
+        exit_signal_dt: "Segnale uscita",
+        asset: "Ticker",
+        duration_bars: "Durata (barre)",
+        pnl: "P/L",
+        pnlcomm: "P/L dopo commissioni",
+        size: "Quantità",
+        price: "Prezzo ingresso",
+        value: "Valore posizione all’ingresso",
+        entry_side: "Direzione",
+        entry_delay_bars: "Ritardo ingresso (barre)",
+        exit_delay_bars: "Ritardo uscita (barre)",
+        entry_bucket_name: "Finestra ingresso",
+        exit_bucket_name: "Finestra uscita",
+        exit_reason: "Motivo uscita",
+      };
+      const numericKeys = new Set([
+        "pct_gain",
+        "pnl_pct",
+        "pnl_percent",
+        "duration_bars",
+        "pnl",
+        "pnlcomm",
+        "size",
+        "price",
+        "value",
+        "entry_delay_bars",
+        "exit_delay_bars",
+      ]);
+      return orderedKeys.map((k) => ({
         name: k,
-        label: k,
-        field: (r) => (typeof r[k] === "object" ? JSON.stringify(r[k]) : r[k]),
-        align: "left",
+        label:
+          labels[k] ||
+          k.replaceAll("_", " ").replace(/^./, (char) => char.toUpperCase()),
+        field: k,
+        format: (value) => this.formatTradeValue(k, value),
+        align: numericKeys.has(k) ? "right" : "left",
+        classes: k === "asset" ? "text-weight-bold" : "",
         sortable: true,
       }));
     },
@@ -980,14 +1294,100 @@ export default {
     window.clearInterval(this.timer);
   },
   methods: {
+    comparisonNumber(row) {
+      return this.comparisonSelection.findIndex(selected => selected.id === row.id) + 1;
+    },
+    newRun() { if (this.detailOpen && this.selectedRun) return this.cloneRun(this.selectedRun); this.detailOpen = false; this.form = defaults(); this.parameterInputs = {}; this.validation = null; this.tab = 'new'; this.loadSchema(); },
+    displayValue(value) { return value === undefined ? 'Non presente' : typeof value === 'object' ? JSON.stringify(value) : String(value); },
+    flattenConfig(value, prefix = '') {
+      return Object.fromEntries(Object.entries(value).flatMap(([key, item]) => {
+        const path = prefix ? `${prefix}.${key}` : key;
+        return item && typeof item === 'object' && !Array.isArray(item) ? Object.entries(this.flattenConfig(item, path)) : [[path, item]];
+      }));
+    },
+    runOverrides(row) { return '### Override richiesti nel run\n```json\n' + JSON.stringify(row.request_snapshot?.configuration?.parameters || {}, null, 2) + '\n```'; },
+    async loadBenchmarkOptions(_value, update) {
+      await this.refreshBenchmarks();
+      update(() => {});
+    },
+    async refreshBenchmarks() {
+      if (this.loadingBenchmarks) return;
+      this.loadingBenchmarks = true;
+      try {
+        const { data } = await api.get(endpoint + "/benchmarks");
+        this.catalog.benchmarks = data;
+      } catch (e) {
+        this.error = this.message(e);
+      } finally {
+        this.loadingBenchmarks = false;
+      }
+    },
     message(e) {
-      return e?.response?.data?.error || e.message || String(e);
+      const message = e?.response?.data?.error || e.message || String(e);
+      if (!e.response) this.networkError = message;
+      return message;
     },
     percent(v) {
       return v == null ? "—" : `${Number(v).toFixed(2)}%`;
     },
     dateTime(v) {
       return v ? new Date(v).toLocaleString("it-IT") : "—";
+    },
+    formatTradeDate(value, timeframe = "daily") {
+      if (value == null || value === "") return "—";
+      const match = String(value).match(
+        /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/,
+      );
+      if (!match) return String(value);
+      const [, year, month, day, hour, minute, second] = match;
+      const date = `${day}/${month}/${year}`;
+      if (!hour || timeframe !== "minutes") return date;
+      return `${date} ${hour}:${minute}${second && second !== "00" ? `:${second}` : ""}`;
+    },
+    formatTradeNumber(value, maximumFractionDigits = 2) {
+      if (value == null || value === "") return "—";
+      const number = Number(value);
+      if (!Number.isFinite(number)) return String(value);
+      return number.toLocaleString("it-IT", { maximumFractionDigits });
+    },
+    formatTradeDuration(value) {
+      if (value == null || value === "") return "—";
+      const totalMinutes = Math.max(0, Math.round(Number(value)));
+      if (!Number.isFinite(totalMinutes)) return String(value);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const bars = `${totalMinutes} ${totalMinutes === 1 ? "barra" : "barre"}`;
+      return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")} (${bars})`;
+    },
+    formatTradeValue(key, value) {
+      if (value == null || value === "") return "—";
+      if (
+        [
+          "open_datetime",
+          "close_datetime",
+          "entry_signal_dt",
+          "exit_signal_dt",
+        ].includes(key)
+      ) {
+        return this.formatTradeDate(value, this.tradeTimeframe);
+      }
+      if (["pct_gain", "pnl_pct", "pnl_percent"].includes(key)) {
+        return `${this.formatTradeNumber(value, 2)}%`;
+      }
+      if (key === "duration_bars") return this.formatTradeDuration(value);
+      if (["pnl", "pnlcomm", "price", "value"].includes(key)) {
+        return this.formatTradeNumber(value, 2);
+      }
+      if (key === "size") return this.formatTradeNumber(value, 4);
+      if (["entry_delay_bars", "exit_delay_bars"].includes(key)) {
+        return this.formatTradeNumber(value, 0);
+      }
+      if (key === "entry_side") {
+        return { long: "Long", short: "Short" }[value] || String(value);
+      }
+      if (typeof value === "number") return this.formatTradeNumber(value, 4);
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
     },
     statusLabel(s) {
       return (
@@ -1051,7 +1451,7 @@ export default {
         const { data } = await api.get(endpoint + "/strategy", {
           params: { name: this.form.strategy },
         });
-        if (version === this.schemaVersion) this.schema = data;
+        if (version === this.schemaVersion) this.schema = strategyDocumentation(data);
       } catch (e) {
         if (version === this.schemaVersion) this.error = this.message(e);
       } finally {
@@ -1059,6 +1459,7 @@ export default {
       }
     },
     setParameter(key, value) {
+      if (this.schema.parameters?.find(parameter => parameter.name === key)?.unused) return;
       if (value == null || value === "") delete this.parameterInputs[key];
       else this.parameterInputs[key] = value;
       this.validation = null;
@@ -1152,6 +1553,8 @@ export default {
           api.get(endpoint + "/jobs"),
           api.get(endpoint + "/schedules"),
         ]);
+        if (this.networkError && this.error === this.networkError) this.error = "";
+        this.networkError = "";
         this.jobs = jobs.data;
         this.schedules = schedules.data;
         if (this.detailOpen && this.selectedRun) {
@@ -1166,6 +1569,7 @@ export default {
         }
       } catch (e) {
         this.error = this.message(e);
+        if (!e.response) this.networkError = this.error;
       } finally {
         this.polling = false;
       }
@@ -1177,6 +1581,8 @@ export default {
       this.tradePage = 1;
       this.tradeRows = [];
       this.equityPoints = [];
+      this.benchmarkPoints = [];
+      this.drawdownPoints = [];
       this.logText = "";
       try {
         const { data } = await api.get(`${endpoint}/jobs/${row.id}`);
@@ -1195,7 +1601,11 @@ export default {
       if (!id || !this.hasArtifact("returns.csv")) return;
       try {
         const { data } = await api.get(`${endpoint}/jobs/${id}/equity`);
-        if (id === this.selectedRun?.id) this.equityPoints = data.points;
+        if (id === this.selectedRun?.id) {
+          this.equityPoints = data.points;
+          this.benchmarkPoints = data.benchmark_points || [];
+          this.drawdownPoints = data.drawdown_points || [];
+        }
       } catch (e) {
         this.error = this.message(e);
       }
@@ -1225,6 +1635,47 @@ export default {
         this.error = this.message(e);
       }
     },
+    async exportTrades() {
+      const id = this.selectedRun?.id;
+      if (!id) return;
+      this.exportingTrades = true;
+      try {
+        const response = await api.get(`${endpoint}/jobs/${id}/trades.xlsx`, {
+          responseType: "blob",
+        });
+        const disposition = String(
+          response.headers?.["content-disposition"] || "",
+        );
+        const filename =
+          disposition
+            .match(/filename\*?=(?:UTF-8''|\")?([^;\"]+)/i)?.[1]
+            ?.trim() || `trades-${id}.xlsx`;
+        const blob = new Blob([response.data], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = decodeURIComponent(filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (e) {
+        let message = this.message(e);
+        if (e?.response?.data instanceof Blob) {
+          try {
+            const payload = JSON.parse(await e.response.data.text());
+            message = payload.error || payload.message || message;
+          } catch {
+            // Keep the original HTTP error message.
+          }
+        }
+        this.error = `Esportazione Excel non riuscita: ${message}`;
+      } finally {
+        this.exportingTrades = false;
+      }
+    },
     hasArtifact(file) {
       return (this.selectedRun?.result?.artifacts || []).includes(file);
     },
@@ -1251,6 +1702,23 @@ export default {
       this.detailOpen = false;
       this.validation = null;
     },
+    deleteRun(row) {
+      this.$q.dialog({
+        title: "Cancella run",
+        message: `Cancellare il run “${this.runLabel(row)}”? Verrà rimosso anche dagli archivi.`,
+        cancel: { label: "Annulla", flat: true },
+        ok: { label: "Cancella", color: "negative" },
+        persistent: true,
+      }).onOk(async () => {
+        try {
+          await api.delete(`${endpoint}/jobs/${row.id}`);
+          if (this.selectedRun?.id === row.id) this.detailOpen = false;
+          await this.poll();
+        } catch (e) {
+          this.error = this.message(e);
+        }
+      });
+    },
     async archiveRun(row, patch) {
       try {
         await api.patch(`${endpoint}/jobs/${row.id}`, patch);
@@ -1261,21 +1729,24 @@ export default {
     },
     editRun() {
       const row = this.selectedRun;
-      this.$q
-        .dialog({
-          title: "Nome simulazione",
-          prompt: { model: this.runLabel(row), type: "text" },
-          cancel: true,
-        })
-        .onOk((label) => {
-          this.$q
-            .dialog({
-              title: "Note",
-              prompt: { model: row.archive?.notes || "", type: "textarea" },
-              cancel: true,
-            })
-            .onOk((notes) => this.archiveRun(row, { label, notes }));
-        });
+      this.notesForm = { id: row.id, label: this.runLabel(row), notes: row.archive?.notes || "" };
+      this.notesError = "";
+      this.notesDialog = true;
+    },
+    async saveRunNotes() {
+      this.savingNotes = true;
+      this.notesError = "";
+      const { id, label, notes } = this.notesForm;
+      try {
+        const { data } = await api.patch(`${endpoint}/jobs/${id}`, { label, notes });
+        if (this.selectedRun?.id === id) this.selectedRun = data;
+        this.jobs = this.jobs.map(row => row.id === id ? data : row);
+        this.notesDialog = false;
+      } catch (e) {
+        this.notesError = this.message(e);
+      } finally {
+        this.savingNotes = false;
+      }
     },
     saveAsBenchmark() {
       const id = this.selectedRun.id;
@@ -1289,46 +1760,77 @@ export default {
         })
         .onOk(async (label) => {
           try {
-            await api.post(endpoint + "/benchmarks", { job_id: id, label });
-            this.catalog.benchmarks = (
-              await api.get(endpoint + "/benchmarks")
-            ).data;
+            const { data } = await api.post(endpoint + "/benchmarks", { job_id: id, label });
+            await this.refreshBenchmarks();
+            this.form.benchmark = data.name;
             this.$q.notify({ type: "positive", message: "Benchmark salvato" });
           } catch (e) {
             this.error = this.message(e);
           }
         });
     },
-    async createSchedule() {
-      this.submitting = true;
+    scheduleForRun(run) {
+      const scheduleId = run?.request_snapshot?.schedule_id;
+      return this.schedules.find((row) => row.id === scheduleId) ||
+        this.schedules.find((row) => row.last_job_id === run.id) ||
+        this.schedules.find((row) => String(row.group_key || "") === this.runLabel(run).trim().replace(/\s+/g, " ").toLocaleLowerCase("it")) ||
+        this.schedules.find((row) => String(row.label || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("it") === this.runLabel(run).trim().replace(/\s+/g, " ").toLocaleLowerCase("it")) || null;
+    },
+    openSchedule(run) {
+      const row = this.scheduleForRun(run);
+      this.scheduleRun = run;
+      this.scheduleRow = row;
+      this.scheduleTime = row ? `${String(row.hour).padStart(2, "0")}:${String(row.minute).padStart(2, "0")}` : "20:00";
+      this.scheduleEnabled = row?.enabled !== false;
+      this.scheduleDialog = true;
+    },
+    async saveSchedule() {
+      if (!this.scheduleRun || !/^([01]\d|2[0-3]):[0-5]\d$/.test(this.scheduleTime)) return;
+      this.scheduleSaving = true;
       try {
         const [hour, minute] = this.scheduleTime.split(":").map(Number);
-        await api.post(endpoint + "/schedules", {
-          configuration: this.config(),
-          label: this.scheduleLabel,
-          hour,
-          minute,
-          enabled: true,
-        });
-        await this.poll();
-        this.$q.notify({
-          type: "positive",
-          message: "Pianificazione giornaliera creata",
-        });
-      } catch (e) {
-        this.error = this.message(e);
+        if (this.scheduleRow) {
+          await api.patch(`/dyn/simulations/schedules/${encodeURIComponent(this.scheduleRow.id)}`, {
+            hour, minute, enabled: this.scheduleEnabled, label: this.runLabel(this.scheduleRun),
+          });
+        } else {
+          await api.post("/dyn/simulations/schedules", {
+            configuration: { ...this.scheduleRun.request_snapshot.configuration, label: this.runLabel(this.scheduleRun) },
+            source_job_id: this.scheduleRun.id,
+            label: this.runLabel(this.scheduleRun),
+            hour, minute, enabled: this.scheduleEnabled,
+          });
+        }
+        this.scheduleDialog = false;
+        await this.load();
+        this.$q.notify({ type: "positive", message: "Schedulazione salvata" });
+      } catch (error) {
+        this.error = error.response?.data?.error || error.message;
       } finally {
-        this.submitting = false;
+        this.scheduleSaving = false;
       }
     },
-    async toggleSchedule(s, enabled) {
-      try {
-        await api.patch(endpoint + "/schedules/" + s.id, { enabled });
-        await this.poll();
-      } catch (e) {
-        this.error = this.message(e);
-      }
+    async removeSchedule() {
+      if (!this.scheduleRow) return;
+      this.$q.dialog({
+        title: "Rimuovi schedulazione",
+        message: "I run già prodotti restano nello storico. Vuoi rimuovere soltanto la pianificazione?",
+        cancel: true,
+      }).onOk(async () => {
+        this.scheduleSaving = true;
+        try {
+          await api.delete(`/dyn/simulations/schedules/${encodeURIComponent(this.scheduleRow.id)}`);
+          this.scheduleDialog = false;
+          await this.load();
+          this.$q.notify({ type: "positive", message: "Schedulazione rimossa" });
+        } catch (error) {
+          this.error = error.response?.data?.error || error.message;
+        } finally {
+          this.scheduleSaving = false;
+        }
+      });
     },
+
   },
 };
 </script>
@@ -1336,6 +1838,13 @@ export default {
 .studio-page {
   max-width: 1600px;
   margin: auto;
+}
+.studio-navigation {
+  position: sticky;
+  top: 50px;
+  z-index: 20;
+  background: #f5f5f5;
+  padding-top: 8px;
 }
 .studio-summary {
   position: sticky;
@@ -1350,8 +1859,58 @@ export default {
   padding: 16px;
   border-radius: 8px;
 }
+.studio-parameter-unused {
+  background: #f3f3f3;
+}
+.studio-parameter-unused :deep(.q-field__native),
+.studio-parameter-unused :deep(.q-field__label),
+.studio-parameter-unused :deep(.q-field__bottom) {
+  color: #757575;
+}
 .studio-error {
   max-width: 330px;
   white-space: normal;
 }
+.trade-table :deep(th),
+.trade-table :deep(td) {
+  white-space: nowrap;
+}
+</style>
+
+<style scoped>
+.studio-runs :deep(th:last-child), .studio-runs :deep(td:last-child) {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: white;
+  box-shadow: -3px 0 5px #0000000d;
+  min-width: 170px;
+  white-space: normal;
+}
+.studio-runs :deep(td:nth-child(2)) { white-space: normal; overflow-wrap: anywhere; min-width: 160px; max-width: 280px; }
+.studio-runs :deep(td:first-child), .studio-runs :deep(th:first-child) { width: 64px; min-width: 64px; }
+.studio-runs :deep(td), .studio-runs :deep(th) { padding: 7px 8px; }
+@media (max-width: 600px) {
+  .studio-runs :deep(th:last-child), .studio-runs :deep(td:last-child) { min-width: 72px; width: 72px; max-width: 72px; }
+}
+</style>
+
+<style scoped>
+.comparison-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: var(--q-primary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+.trade-value { overflow-wrap: anywhere; white-space: normal; }
+.comparison-table td { overflow-wrap: anywhere; white-space: pre-wrap; max-width: 32vw; }
+.trade-table :deep(td) { white-space: normal; overflow-wrap: anywhere; }
 </style>

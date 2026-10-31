@@ -128,16 +128,24 @@
       <span><q-icon name="view_column" /> Parquet</span><span><q-icon name="table_view" /> CSV</span>
       <span><q-icon name="circle" color="positive" /> Disponibile</span><span><q-icon name="circle" color="orange" /> Assente</span><span><q-icon name="circle" color="negative" /> Errore di lettura</span>
     </div>
-    <q-dialog v-model="barsDialog" maximized
+    <q-dialog v-model="barsDialog" maximized @show="showBarsChart"
       ><q-card
         ><q-bar
           ><div>{{ selectedSymbol }} · {{ selectedSource }}</div>
           <q-space /><q-btn flat dense icon="close" v-close-popup /></q-bar
         ><q-card-section
-          ><equity-curve :points="pricePoints" />
+          ><financial-chart
+            v-if="barsDialog && bars.length"
+            ref="barsChart"
+            mode="market"
+            :bars="bars"
+            :timeframe="barsTimeframe"
+            :height="460"
+            :aria-label="`Grafico candlestick interattivo di ${selectedSymbol}`"
+          />
           <div class="text-caption q-mb-md">
-            Prezzo di chiusura normalizzato sulla prima barra visualizzata ·
-            ultime {{ bars.length }} barre
+            Prezzo OHLC e volumi · ultime {{ bars.length }} barre · trascina per
+            esplorare, usa la rotella per lo zoom
           </div>
           <q-table
             flat
@@ -172,9 +180,9 @@
 </template>
 <script>
 import { api } from "boot/axios";
-import EquityCurve from "../components/EquityCurve.vue";
+import FinancialChart from "../components/FinancialChart.vue";
 export default {
-  components: { EquityCurve },
+  components: { FinancialChart },
   data() {
     return {
       lists: [],
@@ -254,20 +262,6 @@ export default {
           format: (v) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()) ? this.formatBarDate(v, this.barsTimeframe) : v,
         }));
     },
-    pricePoints() {
-      const key = Object.keys(this.bars[0] || {}).find(
-        (k) => k.toLowerCase() === "close",
-      );
-      const dateKey = Object.keys(this.bars[0] || {}).find((k) =>
-        ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()),
-      );
-      if (!key || !this.bars[0]?.[key]) return [];
-      const first = Number(this.bars[0][key]);
-      return this.bars.map((r) => ({
-        date: this.formatBarDate(r[dateKey], this.barsTimeframe),
-        value: Number(r[key]) / first,
-      }));
-    },
   },
   async mounted() {
     try {
@@ -335,6 +329,13 @@ export default {
       } catch (e) {
         this.error = this.message(e);
       }
+    },
+    showBarsChart() {
+      this.$nextTick(() => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => this.$refs.barsChart?.refresh());
+        });
+      });
     },
     confirmRefresh() {
       this.$q

@@ -2,9 +2,9 @@
   <q-page class="q-pa-md">
     <div class="row items-start q-col-gutter-md q-mb-md">
       <div class="col">
-        <div class="text-h5">Watchtower Service Monitoring</div>
+        <div class="text-h5">Servizi</div>
         <div class="text-caption text-grey-7">
-          Monitoraggio operativo dei servizi systemd osservati da Watchtower.
+          Monitoraggio operativo dei servizi systemd della piattaforma.
         </div>
         <div v-if="lastRefreshAt" class="text-caption text-grey-6">
           Ultimo refresh: {{ formatDateTime(lastRefreshAt) }}

@@ -20,12 +20,12 @@
 
     <!-- Lightbox per il grafico e la tabella -->
     <q-dialog v-model="lightbox">
-      <q-card style="width: 90vw; height: 90vh;">
+      <q-card style="width: 90vw; max-width: 90vw;">
         <q-card-section>
           <div class="text-h6">{{ selectedRow.filename }}</div>
         </q-card-section>
         <q-card-section style="height: 60%;">
-          <line-chart :chart-data="chartData" :chart-options="chartOptions" />
+          <financial-chart v-if="lightbox" mode="market" :bars="tableData" :height="400" />
         </q-card-section>
         <q-card-section style="height: 30%;">
           <q-table :rows="tableData" :columns="tableColumns" />
@@ -57,11 +57,7 @@
 import { defineComponent, ref, onMounted  } from 'vue'
 import axios from 'axios'
 import { constants } from 'boot/constants'
-import { Line } from 'vue-chartjs'
-import { Chart as ChartJS, Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale } from 'chart.js'
-import { fasAmericanSignLanguageInterpreting } from '@quasar/extras/fontawesome-v5'
-
-ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale)
+import FinancialChart from './FinancialChart.vue'
 
 const columns = [
   { name: 'Name', label: 'Name', field: 'filename', sortable: true, align: 'left' },
@@ -83,31 +79,8 @@ export default defineComponent({
       required: true
     },
   },
-  components: {
-    LineChart: {
-      extends: Line,
-      props: {
-        chartData: {
-          type: Object,
-          required: true
-        },
-        chartOptions: {
-          type: Object,
-          required: true
-        }
-      },
-      watch: {
-        chartData() {
-          this.$data._chart.update()
-        }
-      },
-      mounted() {
-        //this.init()
-        //this.renderChart(this.chartData, this.chartOptions)
-      }
-    }
-  },
-  
+  components: { FinancialChart },
+
   setup(props) {
     const data = ref([]); // Inizializza data come un array reattivo vuoto
     const lightbox = ref(false);
@@ -166,7 +139,7 @@ export default defineComponent({
         try {
           const response = await axios.get(`${constants.API_BASE_URL}/dyn/tk/get/${row.filename}`);
           const csvData = response.data;
-          const parsedData = csvData.split('\n').slice(1).map(line => {
+          const parsedData = csvData.trim().split('\n').slice(1).filter(line => line.trim()).map(line => {
             const [Date, Open, High, Low, Close, AdjClose, Volume, Dividends, StockSplits] = line.split(',');
             return {
               Date,

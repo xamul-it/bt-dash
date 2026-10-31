@@ -1,9 +1,9 @@
 <template>
   <q-card flat bordered class="q-mb-md"><q-card-section>
     <div class="text-h6">Registrazione flussi Watchtower</div>
-    <div class="text-caption q-mb-md">Scegli i simboli da raccogliere in continuo: barre minute, bid/ask e tick. La raccolta continua a pagina chiusa. La selezione Watchtower è indipendente dalla lista Liquidità L1.</div>
+    <div class="text-caption q-mb-md">Scegli i simboli da raccogliere in continuo: barre minute, bid/ask e tick. La raccolta continua a pagina chiusa. La selezione Watchtower è indipendente dalla lista manuale in Titoli monitorati.</div>
     <q-banner v-if="error" class="bg-red-1 q-mb-sm">{{ error }}</q-banner>
-    <div class="row items-start q-col-gutter-md"><div class="col-12 col-md"><q-select v-model="symbols" :options="options" multiple use-input use-chips new-value-mode="add-unique" label="Simboli richiesti da Watchtower" outlined hint="Ticker manuali oppure simboli della copertura caricata" /></div><div class="col-auto"><q-btn label="Salva simboli Watchtower" color="primary" :loading="busy" @click="save" /></div><div class="col-auto"><q-btn flat label="Amministrazione proxy" to="/ProxyAdministration" /></div></div>
+    <div class="row items-start q-col-gutter-md"><div class="col-12 col-md"><q-select v-model="symbols" :options="options" multiple use-input use-chips new-value-mode="add-unique" label="Simboli richiesti da Watchtower" outlined hint="Ticker manuali oppure simboli della copertura caricata" /></div><div class="col-auto"><q-btn label="Salva simboli Watchtower" color="primary" :loading="busy" @click="save" /></div><div class="col-auto"><q-btn flat label="Monitoraggio ZMQ" to="/Zmq/Monitoring" /></div></div>
     <div role="status" class="text-positive q-mt-sm">{{ notice }}</div>
   </q-card-section></q-card>
 </template>

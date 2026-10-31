@@ -105,7 +105,7 @@
             <div class="row q-col-gutter-sm items-center q-mb-sm">
               <div class="col-12 col-md">
                 <q-select v-model="selectedBaselineId" :options="baselineOptions" dense outlined emit-value map-options
-                  label="Baseline" />
+                  label="Baseline" @update:model-value="loadOverview" />
               </div>
               <div class="col-auto">
                 <q-btn flat no-caps color="primary" icon="description" label="stats.html"
@@ -144,38 +144,9 @@
               </q-card-section>
             </q-card>
             <div class="text-body1">Confronto della baseline con i replay della riconciliazione giornaliera.</div>
-            <div class="overflow-auto">
-              <table class="footprint-table q-mt-sm">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>Baseline<div class="text-caption text-grey-7">{{ dateRange(selectedBaseline) }}</div></th>
-                    <th v-for="window in comparisonWindows" :key="window.days">
-                      Ultimi {{ window.days }} giorni
-                      <div class="text-caption text-grey-7">{{ dateRange(window.comparison?.recent) }}</div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td>Trade</td><td>{{ selectedBaseline?.sample_size ?? '—' }}</td><td v-for="window in comparisonWindows" :key="`trades-${window.days}`">{{ window.comparison?.recent?.sample_size ?? '—' }}</td></tr>
-                  <tr><td>Win rate</td><td>{{ pct(selectedBaseline?.metrics?.win_rate) }}</td><td v-for="window in comparisonWindows" :key="`win-${window.days}`">{{ pct(window.comparison?.recent?.metrics?.win_rate) }}</td></tr>
-                  <tr><td>Gain medio/trade</td><td>{{ pctSigned(selectedBaseline?.metrics?.mean) }}</td><td v-for="window in comparisonWindows" :key="`trade-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.mean) }}</td></tr>
-                  <tr><td>Gain medio/giorno</td><td>{{ pctSigned(selectedBaseline?.metrics?.average_daily_return_pct) }}</td><td v-for="window in comparisonWindows" :key="`day-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.average_daily_return_pct) }}</td></tr>
-                  <tr><td>Compatibilità statistica</td><td>—</td><td v-for="window in comparisonWindows" :key="`compatibility-${window.days}`">
-                    <span :class="compatibilityColor(window.comparison)">{{ compatibilityLabel(window.comparison) }}
-                      <q-tooltip>{{ compatibilityDirectionText(window.comparison) }}</q-tooltip>
-                    </span>
-                  </td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="text-caption text-grey-7 q-mt-sm">
-              Compatibilità: test bilaterale del gain medio/trade della finestra rispetto a media e dispersione della baseline.
-              Valore alto = il campione è statisticamente coerente con la baseline.
-              Colore del gain medio rispetto alla baseline: verde sopra +0,01 punti percentuali,
-              rosso sotto −0,01, grigio nella fascia ±0,01.
-              Le date seguono sempre il calendario di trading; eventuali giorni senza replay restano fuori dal campione.
-            </div>
+            <BaselineComparison :selected-baseline="selectedBaseline" :windows="comparisonWindows"
+              daily-series-label="risultati giornalieri dei run"
+              calendar-note="Le finestre contengono 3, 5…25 giornate valide, saltando quelle aperte o senza trade." />
           </template>
         </q-card-section>
       </q-card>
@@ -194,35 +165,9 @@
             <div class="text-body1">
               Baseline Backtrader selezionata confrontata con gli eseguiti Alpaca delle ultime finestre di trading.
             </div>
-            <div class="overflow-auto">
-              <table class="footprint-table q-mt-sm">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>Baseline Backtrader<div class="text-caption text-grey-7">{{ dateRange(selectedBaseline) }}</div></th>
-                    <th v-for="window in alpacaComparisonWindows" :key="`alpaca-${window.days}`">
-                      Alpaca — ultimi {{ window.days }} giorni
-                      <div class="text-caption text-grey-7">{{ dateRange(window.comparison?.recent) }}</div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td>Trade</td><td>{{ selectedBaseline?.sample_size ?? '—' }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-trades-${window.days}`">{{ window.comparison?.recent?.sample_size ?? '—' }}</td></tr>
-                  <tr><td>Win rate</td><td>{{ pct(selectedBaseline?.metrics?.win_rate) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-win-${window.days}`">{{ pct(window.comparison?.recent?.metrics?.win_rate) }}</td></tr>
-                  <tr><td>Gain medio/trade</td><td>{{ pctSigned(selectedBaseline?.metrics?.mean) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-trade-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.mean) }}</td></tr>
-                  <tr><td>Gain medio/giorno</td><td>{{ pctSigned(selectedBaseline?.metrics?.average_daily_return_pct) }}</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-day-gain-${window.days}`">{{ pctSigned(window.comparison?.recent?.metrics?.average_daily_return_pct) }}</td></tr>
-                  <tr><td>Compatibilità statistica</td><td>—</td><td v-for="window in alpacaComparisonWindows" :key="`alpaca-compatibility-${window.days}`">
-                    <span :class="compatibilityColor(window.comparison)">{{ compatibilityLabel(window.comparison) }}
-                      <q-tooltip>{{ compatibilityDirectionText(window.comparison) }}</q-tooltip>
-                    </span>
-                  </td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="text-caption text-grey-7 q-mt-sm">
-              I trade e i rendimenti giornalieri provengono solo dagli ordini Alpaca con uscita eseguita; la baseline resta sempre Backtrader.
-              Le date seguono sempre il calendario di trading, anche se una riconciliazione manca.
-            </div>
+            <BaselineComparison :selected-baseline="selectedBaseline" :windows="alpacaComparisonWindows"
+              daily-series-label="risultati giornalieri dei run"
+              calendar-note="I risultati Alpaca includono soltanto uscite eseguite; la baseline è Backtrader. Le finestre contengono 3, 5…25 giornate valide, saltando quelle aperte o senza trade." />
           </template>
         </q-card-section>
       </q-card>
@@ -236,27 +181,9 @@
           </div>
         </q-card-section>
         <q-separator />
-        <q-table
-          :rows="reconciliationRows"
-          :columns="reconciliationColumns"
-          row-key="key"
-          dense
-          flat
-          :pagination="{ rowsPerPage: 0 }"
-          hide-bottom
-        >
-          <template #body="props">
-            <q-tr
-              :props="props"
-              :class="{ 'cursor-pointer': isExpandable(props.row) }"
-              @click="isExpandable(props.row) && toggleDay(props.row.key)"
-            >
-              <q-td auto-width>
-                <q-icon
-                  v-if="isExpandable(props.row)"
-                  :name="expandedDays.includes(props.row.key) ? 'expand_more' : 'chevron_right'"
-                />
-              </q-td>
+        <DailyReconciliationTable :rows="reconciliationRows" :columns="reconciliationColumns"
+          :expanded="expandedDays" :expandable="isExpandable" @toggle="toggleDay">
+          <template #summary="props">
               <q-td key="trading_date" :props="props">
                 <strong v-if="props.row.change">{{ props.row.trading_date }}</strong>
                 <span v-else>{{ props.row.trading_date }}</span>
@@ -286,10 +213,8 @@
                 </div>
               </q-td>
               <q-td key="detail" :props="props">{{ props.row.detail }}</q-td>
-            </q-tr>
-
-            <q-tr v-if="isExpandable(props.row) && expandedDays.includes(props.row.key)" :props="props" no-hover>
-              <q-td colspan="100%" class="bg-grey-1">
+          </template>
+          <template #detail="props">
                 <div class="q-pa-sm">
                   <template v-if="props.row.raw && !props.row.verification && props.row.raw.status !== 'error'">
                     <ul class="q-my-xs q-pl-md">
@@ -430,10 +355,8 @@
                   </template>
                   </template>
                 </div>
-              </q-td>
-            </q-tr>
           </template>
-        </q-table>
+        </DailyReconciliationTable>
       </q-card>
 
       <!-- Timeline parametri completa -->
@@ -511,6 +434,8 @@
 </template>
 
 <script>
+import BaselineComparison from '../components/BaselineComparison.vue'
+import DailyReconciliationTable from '../components/DailyReconciliationTable.vue'
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
 
@@ -532,6 +457,7 @@ const EXIT_ISSUE_LABELS = {
 
 export default {
   name: 'WatchtowerCronMonitoring',
+  components: { BaselineComparison, DailyReconciliationTable },
   data() {
     return {
       profiles: [],
@@ -659,13 +585,13 @@ export default {
     comparisonWindows() {
       return [3, 5, 10, 15, 20, 25].map((days) => ({
         days,
-        comparison: this.overview?.reconciliation_statistics?.backtest?.[String(days)] || null,
+        comparison: this.referenceMatchesSelection ? this.overview?.reconciliation_statistics?.backtest?.[String(days)] || null : null,
       }))
     },
     alpacaComparisonWindows() {
       return [3, 5, 10, 15, 20, 25].map((days) => ({
         days,
-        comparison: this.overview?.reconciliation_statistics?.alpaca?.[String(days)] || null,
+        comparison: this.referenceMatchesSelection ? this.overview?.reconciliation_statistics?.alpaca?.[String(days)] || null : null,
       }))
     },
     replayParamsVersion() {
@@ -674,6 +600,9 @@ export default {
         const versions = this.overview?.timeline || []
         return versions.find((version) => version.id === id) || this.overview?.current_version || null
       }
+    },
+    referenceMatchesSelection() {
+      return this.overview?.reconciliation_statistics?.baseline_id === this.selectedBaselineId
     },
     reversedTimeline() {
       return [...(this.overview?.timeline || [])].reverse()
@@ -1208,10 +1137,11 @@ export default {
       this.loadError = ''
       try {
         const { data } = await api.get(`/dyn/obs/watchtower/cron/${profile}/overview`, {
-          params: { _ts: Date.now() },
+          params: { _ts: Date.now(), ...(this.overview?.profile === profile && this.selectedBaselineId
+            ? { baseline_id: this.selectedBaselineId } : {}) },
           headers: { 'Cache-Control': 'no-cache' },
         })
-        if (profile !== this.selectedProfile) return
+        if (profile !== this.selectedProfile || requestVersion !== this.calculationRequestVersion) return
         this.overview = data
         const baselines = data?.baselines || []
         if (!baselines.some((baseline) => baseline.id === this.selectedBaselineId)) {
@@ -1221,12 +1151,12 @@ export default {
           await this.recoverCalculation(profile)
         }
       } catch (err) {
-        if (profile === this.selectedProfile) {
+        if (profile === this.selectedProfile && requestVersion === this.calculationRequestVersion) {
           this.loadError = `Impossibile caricare il profilo ${profile}: ${err?.message || err}`
           this.overview = null
         }
       } finally {
-        this.loading = false
+        if (requestVersion === this.calculationRequestVersion) this.loading = false
       }
     },
     async createChangeMarker() {
@@ -1276,43 +1206,6 @@ export default {
       if (value === null || value === undefined) return '—'
       const v = Number(value)
       return `${v >= 0 ? '+' : ''}${v.toFixed(3)}%`
-    },
-    compatibilityDelta(comparison) {
-      const baseline = this.selectedBaseline?.metrics?.mean
-      const recent = comparison?.recent?.metrics?.mean
-      if (baseline === null || baseline === undefined || recent === null || recent === undefined) return null
-      const delta = Number(recent) - Number(baseline)
-      return Number.isFinite(delta) ? delta : null
-    },
-    compatibilityColor(comparison) {
-      const delta = this.compatibilityDelta(comparison)
-      // Tolerance keeps the inclusive ±0.01 boundary stable under float subtraction.
-      if (delta === null || Math.abs(delta) <= 0.01 + 1e-12) return 'text-grey-7'
-      return delta > 0 ? 'text-positive' : 'text-negative'
-    },
-    compatibilityDirectionText(comparison) {
-      const delta = this.compatibilityDelta(comparison)
-      if (delta === null) return 'Dati insufficienti per confrontare il gain medio con la baseline.'
-      const direction = Math.abs(delta) <= 0.01 + 1e-12
-        ? 'nella fascia neutra' : (delta > 0 ? 'superiore alla baseline' : 'inferiore alla baseline')
-      return `Gain medio/trade ${direction}: scarto ${delta >= 0 ? '+' : ''}${delta.toFixed(6)} punti percentuali. Fascia neutra: ±0,01 punti percentuali. Il colore indica la direzione del gain; la percentuale indica la compatibilità statistica.`
-    },
-    compatibilityLabel(comparison) {
-      if (this.compatibilityDelta(comparison) === null) return '—'
-      const baselineMean = Number(this.selectedBaseline?.metrics?.mean)
-      const baselineStddev = Number(this.selectedBaseline?.metrics?.stddev)
-      const recentMean = Number(comparison?.recent?.metrics?.mean)
-      const sampleSize = Number(comparison?.recent?.sample_size)
-      if (![baselineMean, baselineStddev, recentMean, sampleSize].every(Number.isFinite) || baselineStddev <= 0 || sampleSize <= 0) return '—'
-      const z = Math.abs(recentMean - baselineMean) / (baselineStddev / Math.sqrt(sampleSize))
-      return this.pct(this.normalTwoSidedProbability(z))
-    },
-    normalTwoSidedProbability(z) {
-      // Abramowitz-Stegun approximation of erfc(z / sqrt(2)).
-      const t = 1 / (1 + 0.2316419 * z)
-      const density = 0.3989422804014327 * Math.exp(-0.5 * z * z)
-      const upperTail = density * ((((1.330274429 * t - 1.821255978) * t + 1.781477937) * t - 0.356563782) * t + 0.319381530) * t
-      return Math.max(0, Math.min(1, 2 * upperTail))
     },
     rowBadgeColor(result) {
       if (this.replayFailed(result)) return 'grey-8'

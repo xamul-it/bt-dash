@@ -2,7 +2,7 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const source = fs.readFileSync(path.join(__dirname, '../src/bt/pages/WatchtowerCronMonitoring.vue'), 'utf8')
+const source = fs.readFileSync(path.join(__dirname, '../src/bt/utils/baselineCompatibility.js'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, '../src/bt/components/BaselineComparison.vue'), 'utf8')
 const methods = {}
 for (const name of ['compatibilityDelta', 'compatibilityColor', 'compatibilityDirectionText', 'compatibilityLabel', 'normalTwoSidedProbability', 'pct']) {
   const match = source.match(new RegExp(`    ${name}\\(([^)]*)\\) \\{([\\s\\S]*?)\\n    \\},`))

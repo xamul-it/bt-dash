@@ -66,26 +66,6 @@
             label="Storico da"
             v-model="managed.fromdate"
           />
-          <q-input
-            class="col-3 col-md-1"
-            outlined
-            dense
-            type="number"
-            label="Ora"
-            v-model.number="managed.hour"
-            min="0"
-            max="23"
-          />
-          <q-input
-            class="col-3 col-md-1"
-            outlined
-            dense
-            type="number"
-            label="Minuti"
-            v-model.number="managed.minute"
-            min="0"
-            max="59"
-          />
           <div class="col-12">
             <q-checkbox
               v-model="managed.enabled"
@@ -111,11 +91,9 @@
                     ? " / " + definition.alpaca_feed
                     : ""
                 }}
-                · {{ String(definition.hour).padStart(2, "0") }}:{{
-                  String(definition.minute).padStart(2, "0")
-                }}
-                Europe/Rome</q-item-label
+                · Storico richiesto da {{ definition.fromdate }}</q-item-label
               >
+              <BenchmarkCoverage :benchmark="rows.find(row => row.name === definition.id)" :definition="definition" />
               <q-item-label caption v-if="definition.job"
                 >{{ definition.job.status }} · {{ definition.job.phase }}
                 <span class="text-negative">{{
@@ -138,6 +116,13 @@
                     (enabled) => toggleDefinition(definition, enabled)
                   "
                 /><q-btn
+                  flat
+                  round
+                  icon="edit"
+                  aria-label="Modifica data inizio benchmark"
+                  @click="editDefinition(definition)"
+                  ><q-tooltip>Modifica configurazione e data iniziale</q-tooltip></q-btn
+                ><q-btn
                   flat
                   round
                   icon="refresh"
@@ -192,6 +177,7 @@
         </div> </q-card-section
     ></q-card>
     <div class="row items-center q-mb-md">
+      <q-select class="col-12 col-sm-3 q-mr-sm" outlined dense label="Provenienza" v-model="sourceFilter" :options="sourceOptions" emit-value map-options />
       <q-input
         class="col"
         outlined
@@ -251,6 +237,12 @@
         ></template
       >
     </q-table>
+    <q-dialog v-model="definitionDialog" persistent><q-card style="width: 500px; max-width: 95vw"><q-card-section class="text-h6">Modifica benchmark schedulato</q-card-section><q-card-section>
+      <div class="q-mb-md">{{ managed.label }} · {{ managed.ticker }}</div>
+      <q-input outlined type="date" stack-label label="Storico da" v-model="managed.fromdate" />
+      <div class="text-caption q-mt-sm">Salva la data e ricalcola il benchmark se abilitato. I dati pubblicati cambiano al termine del calcolo.</div>
+      <div v-if="error" class="text-negative q-mt-sm">{{ error }}</div>
+    </q-card-section><q-card-actions align="right"><q-btn flat label="Annulla" :disable="savingDefinition" v-close-popup /><q-btn color="primary" label="Salva data" :loading="savingDefinition" @click="saveDefinition" /></q-card-actions></q-card></q-dialog>
     <q-dialog v-model="dialog"
       ><q-card style="width: 1000px; max-width: 95vw"
         ><q-bar
@@ -262,6 +254,7 @@
             {{ observations }} osservazioni · rendimento cumulato
             {{ totalReturn }}
           </div>
+          <BenchmarkCoverage v-if="selected?.source_type === 'buyhold'" :benchmark="selected" :definition="selected.definition || definitions.find(row => row.id === selected.name)" />
           <div v-if="selected?.source_job_id" class="text-caption text-grey-7">
             Run sorgente: {{ selected.source_job_id }}
           </div></q-card-section
@@ -301,12 +294,16 @@
 import { api } from "boot/axios";
 import { constants } from "boot/constants";
 import EquityCurve from "../components/EquityCurve.vue";
+import BenchmarkCoverage from "../components/BenchmarkCoverage.vue";
 export default {
-  components: { EquityCurve },
+  components: { EquityCurve, BenchmarkCoverage },
   data() {
     return {
       rows: [],
       search: "",
+      sourceFilter: 'all',
+      sourceOptions: [{ label: 'Tutti', value: 'all' }, { label: 'Run statici', value: 'run' }, { label: 'CSV', value: 'csv' }, { label: 'Schedulati', value: 'buyhold' }],
+      definitionDialog: false,
       showHidden: false,
       error: "",
       loading: false,
@@ -344,6 +341,13 @@ export default {
         { name: "name", label: "Identificativo", field: "name", align: "left" },
         { name: "source", label: "Provenienza", align: "left" },
         {
+          name: "first_date",
+          label: "Dati dal",
+          field: (r) => r.first_date || "—",
+          align: "left",
+          sortable: true,
+        },
+        {
           name: "last_date",
           label: "Dati fino al",
           field: (r) => r.last_date || r.coverage_error || "Non calcolato",
@@ -362,7 +366,7 @@ export default {
           name: "updated_at",
           label: "Aggiornamento",
           field: (r) =>
-            r.updated_at ? new Date(r.updated_at).toLocaleString("it-IT") : "—",
+            r.updated_at ? new Date(r.updated_at).toLocaleDateString("it-IT") : "—",
           align: "left",
         },
         { name: "actions", label: "Azioni", align: "right" },
@@ -371,7 +375,7 @@ export default {
   },
   computed: {
     visibleRows() {
-      return this.rows.filter((r) => this.showHidden || !r.hidden);
+      return this.rows.filter(r => (this.showHidden || !r.hidden) && (this.sourceFilter === 'all' || r.source_type === this.sourceFilter));
     },
     totalReturn() {
       return this.points.length
@@ -387,13 +391,19 @@ export default {
     window.clearInterval(this.timer);
   },
   methods: {
+    editDefinition(row) {
+      this.managed = { ...row };
+      this.definitionDialog = true;
+    },
     async saveDefinition() {
       this.savingDefinition = true;
+      this.error = "";
       try {
         const { data } = await api.post(
           "/dyn/simulations/benchmark-definitions",
           this.managed,
         );
+        this.definitionDialog = false;
         if (data.enabled)
           await api.post(
             `/dyn/simulations/benchmark-definitions/${data.id}/refresh`,

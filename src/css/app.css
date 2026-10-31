@@ -1,1 +1,9 @@
 /* app global css */
+
+/* Keep wide tables and their horizontal scrollbar inside the visible area. */
+.q-table__container { min-width: 0; max-width: 100%; }
+.q-table__middle { max-height: 60vh; overflow: auto; overscroll-behavior: contain; }
+.q-table__middle thead tr th { position: sticky; top: 0; z-index: 2; background: var(--q-table-header-bg, white); }
+.body--dark .q-table__middle thead tr th { background: #1d1d1d; }
+.q-table__bottom { flex-wrap: wrap; }
+@media (max-width: 600px) { .q-table__middle { max-height: 55vh; } }

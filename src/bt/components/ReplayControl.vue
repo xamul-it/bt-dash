@@ -29,16 +29,16 @@
     <q-separator />
     <q-card-section>
       <div class="row items-center q-col-gutter-md q-mb-sm"><div class="col-12 col-md"><div class="text-subtitle1">Flusso ricevuto dal proxy replay</div><div class="text-caption">Eventi ricevuti tramite una vera sottoscrizione PUB/SUB della dashboard, non riprodotti da un timer del browser. Grafico: campione di 500 eventi; tabella: ultimi 100. Ad alta velocità la visualizzazione non conserva ogni evento.</div></div><div class="col-12 col-md-3"><q-select v-model="viewSymbol" :options="Object.keys(state.available || {})" label="Simbolo visualizzato" outlined dense /></div></div>
-      <MarketEventViewer :rows="visible" />
+      <OpenPositionChart :key="viewSymbol" :symbol="viewSymbol" :rows="visible" historical follow />
     </q-card-section>
   </q-card>
 </template>
 <script>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from 'boot/axios'
-import MarketEventViewer from './MarketEventViewer.vue'
+import OpenPositionChart from './OpenPositionChart.vue'
 export default {
-  components: { MarketEventViewer },
+  components: { OpenPositionChart },
   props: { symbols: { type: Array, default: () => [] }, initialSymbol: { type: String, default: '' } },
   setup (props) {
     const state = ref({ state: 'STOPPED' }), selection = ref([]), date = ref(''), session = ref('ah'), speed = ref(60), remap = ref(false), busy = ref(false), error = ref(''), viewSymbol = ref('')

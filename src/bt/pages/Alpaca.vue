@@ -1,20 +1,13 @@
 <template>
-  <q-page class="row full-width">
-    <div class="full-width">
-      <AlpacaPortfolioPrototype />
-      <OrderForm />
-    </div>
+  <q-page>
+    <AlpacaAccountDashboard />
   </q-page>
 </template>
 
 <script>
-import AlpacaPortfolioPrototype from 'src/bt/components/AlpacaPortfolioPrototype.vue'
-import OrderForm from 'src/bt/components/OrderForm.vue'
+import AlpacaAccountDashboard from 'src/bt/components/AlpacaAccountDashboard.vue'
 
 export default {
-  components: {
-    AlpacaPortfolioPrototype,
-    OrderForm
-  }
+  components: { AlpacaAccountDashboard }
 }
 </script>
