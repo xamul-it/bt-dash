@@ -47,6 +47,7 @@ module.exports = configure(function (ctx) {
 
     // Full list of options: https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-build
     build: {
+      ...(process.env.BT_DASH_DIST_DIR ? { distDir: process.env.BT_DASH_DIST_DIR } : {}),
       extendWebpack(cfg) {
         cfg.watchOptions = {
           aggregateTimeout: 200,

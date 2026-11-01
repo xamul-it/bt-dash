@@ -13,6 +13,7 @@
           </div>
         </div>
         <div class="col-auto row q-col-gutter-sm items-center">
+          <DashboardFavorite kind="intraday" :id="selectedPortfolioKeyId || ''" />
           <div class="col-auto">
             <q-select
               v-model="selectedWindowOpen"
@@ -579,12 +580,15 @@ import { defineComponent, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import { constants } from 'boot/constants'
 import { Notify } from 'quasar'
+import { useRoute } from 'vue-router'
+import DashboardFavorite from '../components/DashboardFavorite.vue'
 import WatchtowerRegistrations from '../components/WatchtowerRegistrations.vue'
 
 export default defineComponent({
   name: 'WatchtowerPage',
-  components: { WatchtowerRegistrations },
+  components: { WatchtowerRegistrations, DashboardFavorite },
   setup() {
+    const route = useRoute()
     const runs = ref([])
     const watchtower = ref([])
     const watchtowerOverview = ref(null)
@@ -595,7 +599,7 @@ export default defineComponent({
     const watchtowerWindows = ref([])
     const selectedWindowOpen = ref(null)
     const portfolioContexts = ref([])
-    const selectedPortfolioKeyId = ref(null)
+    const selectedPortfolioKeyId = ref(route.query.portfolio || null)
     const portfolioSession = ref(null)
     const selectedRun = ref(null)
     const showDialog = ref(false)

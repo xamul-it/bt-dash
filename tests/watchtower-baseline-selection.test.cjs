@@ -78,3 +78,10 @@ test('switching baseline discards late results from the previous selection', asy
   assert.equal(ctx.selectedBaselineId, 2)
   assert.equal(ctx.overview, newest)
 })
+
+
+test('dashboard link opens the chosen profile instead of the default live profile', async () => {
+  const ctx = { $route: { query: { profile: 'challenger' } }, profiles: [], selectedProfile: null, loadOverview: async () => {} }
+  await makeLoadProfiles({ get: async () => ({ data: [{ profile: 'live' }, { profile: 'challenger' }] }) }).call(ctx)
+  assert.equal(ctx.selectedProfile, 'challenger')
+})

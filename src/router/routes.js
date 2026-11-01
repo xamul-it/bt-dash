@@ -9,6 +9,7 @@ const routes = [
       { path: '/TickerLists', component: () => import('src/bt/pages/TickerLists.vue')},
       { path: '/Benchmark', component: () => import('src/bt/pages/SimulationBenchmarks.vue')},
       { path: '/ExecuteStrategy', component: () => import('src/bt/pages/BacktestingStudio.vue')},
+      { path: '/Laboratory/Schedules', component: () => import('src/bt/pages/LaboratorySchedules.vue')},
       { path: '/Scheduler', component: () => import('src/bt/pages/Scheduler.vue')},
       { path: '/Zmq/Recording', alias: '/QuoteMonitoring', component: () => import('src/bt/pages/QuoteMonitoring.vue')},
       { path: '/Zmq/Monitoring', alias: '/ProxyAdministration', component: () => import('src/bt/pages/ProxyAdministration.vue')},

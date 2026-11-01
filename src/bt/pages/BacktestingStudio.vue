@@ -465,7 +465,7 @@
           :options="leverageOptions"
           label="Leva"
         />
-        <q-toggle v-model="pinnedOnly" label="Solo preferiti" /><q-toggle
+        <q-toggle v-model="showScheduleHistory" label="Mostra storico schedulazioni" /><q-toggle v-model="pinnedOnly" label="Solo preferiti" /><q-toggle
           v-model="showHidden"
           label="Mostra archiviati"
         />
@@ -553,6 +553,8 @@
               :aria-label="p.row.archive?.hidden ? 'Ripristina' : 'Archivia'"
               @click="archiveRun(p.row, { hidden: !p.row.archive?.hidden })">
               <q-tooltip>{{ p.row.archive?.hidden ? 'Ripristina' : 'Archivia' }}</q-tooltip></q-btn>
+            <q-btn v-if="scheduleForRun(p.row)" flat dense round icon="layers" aria-label="Storico schedulazione"
+              :to="{ path: '/Laboratory/Schedules', query: { history: scheduleForRun(p.row).id } }"><q-tooltip>Storico schedulazione</q-tooltip></q-btn>
             <q-btn v-if="p.row.request_snapshot?.configuration?.strategy" flat dense round icon="schedule" aria-label="Schedula" @click="openSchedule(p.row)"><q-tooltip>Schedula</q-tooltip></q-btn>
             <q-btn v-if="p.row.done" flat dense round color="negative" icon="delete_outline"
               aria-label="Cancella" @click="deleteRun(p.row)"><q-tooltip>Cancella</q-tooltip></q-btn>
@@ -610,6 +612,8 @@
               :aria-label="p.row.archive?.hidden ? 'Ripristina' : 'Archivia'"
               @click="archiveRun(p.row, { hidden: !p.row.archive?.hidden })">
               <q-tooltip>{{ p.row.archive?.hidden ? 'Ripristina' : 'Archivia' }}</q-tooltip></q-btn>
+            <q-btn v-if="scheduleForRun(p.row)" flat dense round icon="layers" aria-label="Storico schedulazione"
+              :to="{ path: '/Laboratory/Schedules', query: { history: scheduleForRun(p.row).id } }"><q-tooltip>Storico schedulazione</q-tooltip></q-btn>
             <q-btn v-if="p.row.request_snapshot?.configuration?.strategy" flat dense round icon="schedule" aria-label="Schedula" @click="openSchedule(p.row)"><q-tooltip>Schedula</q-tooltip></q-btn>
             <q-btn v-if="p.row.done" flat dense round color="negative" icon="delete_outline"
               aria-label="Cancella" @click="deleteRun(p.row)"><q-tooltip>Cancella</q-tooltip></q-btn>
@@ -640,6 +644,8 @@
           <q-input v-model="scheduleTime" type="time" outlined dense label="Ora giornaliera · Europe/Rome"
             :rules="[value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value) || 'Ora non valida']" />
           <q-toggle v-model="scheduleEnabled" label="Pianificazione attiva" />
+          <div v-if="scheduleRow" class="row items-center"><DashboardFavorite kind="schedule" :id="scheduleRow.id" />Preferito nella dashboard</div>
+          <div v-else class="text-caption">Dopo il salvataggio puoi aggiungerla ai preferiti da Laboratorio → Backtest schedulati.</div>
           <div class="text-body2 q-mt-md">
             Periodo: <b>{{ scheduleRun?.request_snapshot?.configuration?.fromdate }}</b> → <b>oggi</b>
           </div>
@@ -900,6 +906,9 @@
 </template>
 
 <script>
+import DashboardFavorite from '../components/DashboardFavorite.vue';
+import { scheduleForRun, latestScheduledRuns } from '../utils/scheduledRuns.mjs';
+
 import RunDiagnostics from "../components/RunDiagnostics.vue";
 import { api } from "boot/axios";
 import { constants } from "boot/constants";
@@ -942,7 +951,7 @@ const defaults = () => ({
   },
 });
 export default {
-  components: { EquityCurve, ParameterHelp, MarkdownNotes, RunDiagnostics },
+  components: { DashboardFavorite, EquityCurve, ParameterHelp, MarkdownNotes, RunDiagnostics },
   props: { initialTab: { type: String, default: "runs" } },
   data() {
     return {
@@ -969,6 +978,7 @@ export default {
       validation: null,
       jobs: [],
       schedules: [],
+      showScheduleHistory: false,
       timer: null,
       polling: false,
       search: "",
@@ -1163,7 +1173,8 @@ export default {
         .map(Number))].sort((a, b) => a - b);
     },
     filteredRuns() {
-      return this.jobs.filter(
+      const runs = this.showScheduleHistory ? this.jobs : latestScheduledRuns(this.jobs, this.schedules);
+      return runs.filter(
         (r) =>
           r.kind === "simulation" &&
           !r.archive?.deleted_at &&
@@ -1770,11 +1781,7 @@ export default {
         });
     },
     scheduleForRun(run) {
-      const scheduleId = run?.request_snapshot?.schedule_id;
-      return this.schedules.find((row) => row.id === scheduleId) ||
-        this.schedules.find((row) => row.last_job_id === run.id) ||
-        this.schedules.find((row) => String(row.group_key || "") === this.runLabel(run).trim().replace(/\s+/g, " ").toLocaleLowerCase("it")) ||
-        this.schedules.find((row) => String(row.label || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("it") === this.runLabel(run).trim().replace(/\s+/g, " ").toLocaleLowerCase("it")) || null;
+      return scheduleForRun(run, this.schedules);
     },
     openSchedule(run) {
       const row = this.scheduleForRun(run);

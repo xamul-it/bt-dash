@@ -18,6 +18,7 @@
         </div>
       </div>
       <div class="col-auto row q-col-gutter-sm items-center">
+        <DashboardFavorite kind="cron" :id="selectedProfile || ''" />
         <div class="col-auto">
           <q-select
             v-model="selectedProfile"
@@ -435,6 +436,7 @@
 
 <script>
 import BaselineComparison from '../components/BaselineComparison.vue'
+import DashboardFavorite from '../components/DashboardFavorite.vue'
 import DailyReconciliationTable from '../components/DailyReconciliationTable.vue'
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
@@ -457,7 +459,7 @@ const EXIT_ISSUE_LABELS = {
 
 export default {
   name: 'WatchtowerCronMonitoring',
-  components: { BaselineComparison, DailyReconciliationTable },
+  components: { BaselineComparison, DailyReconciliationTable, DashboardFavorite },
   data() {
     return {
       profiles: [],
@@ -1116,7 +1118,7 @@ export default {
         if (this.profiles.length && !this.selectedProfile) {
           // L'ordine restituito dall'API non è una preferenza utente: il
           // monitor deve aprirsi sul profilo operativo, quando disponibile.
-          this.selectedProfile = this.profiles.find((profile) =>
+          this.selectedProfile = this.profiles.find(p => p.profile === this.$route?.query?.profile)?.profile || this.profiles.find((profile) =>
             String(profile?.profile || '').trim().toLowerCase() === 'live'
           )?.profile || this.profiles[0].profile
         }

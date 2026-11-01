@@ -2,53 +2,34 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const source = fs.readFileSync(path.join(__dirname, '../src/bt/pages/SimulationDashboard.vue'), 'utf8')
+const source = fs.readFileSync(path.join(__dirname, '../src/bt/pages/LaboratorySchedules.vue'), 'utf8')
 const dataSource = fs.readFileSync(path.join(__dirname, '../src/bt/pages/SimulationData.vue'), 'utf8')
-test('pin icons use bundled SVGs without relying on an unloaded icon font', () => {
-  assert.match(source, /import \{ matPushPin \} from "@quasar\/extras\/material-icons"/)
-  assert.match(source, /import \{ outlinedPushPin \} from "@quasar\/extras\/material-icons-outlined"/)
-  assert.match(source, /:icon="run\.archive\?\.pinned \? pinFilled : pinOutlined"/)
-  assert.doesNotMatch(source, /'o_push_pin'/)
+test('dashboard contains only scheduled favorites and keeps history separate', async () => {
+  const { scheduleForRun, newestRuns } = await import('../src/bt/utils/scheduledRuns.mjs')
+  const computed = name => new Function('newestRuns', 'isDashboardFavorite', 'return function() {' + source.match(new RegExp(`    ${name}\\(\\) \\{([\\s\\S]*?)\\n    \\},`))[1] + '}')(newestRuns, (kind, id) => id === 'a')
+  const run = (id, schedule, status = 'completed') => ({ id, created_at: id, kind: 'simulation', status, archive: { pinned: true }, request_snapshot: { schedule_id: schedule } })
+  const ctx = { jobs: [run('1', 'a'), run('2', 'a', 'failed'), run('3', null), run('4', 'b')], schedules: [{ id: 'a', label: 'Same' }, { id: 'b', label: 'Same' }, { id: 'c', label: 'Empty' }], search: '', favoritesOnly: true, historyGroupKey: '' }
+  ctx.scheduleForRun = run => scheduleForRun(run, ctx.schedules)
+  ctx.visibleRuns = computed('visibleRuns').call(ctx)
+  ctx.runGroups = computed('runGroups').call(ctx)
+  assert.deepEqual(computed('cards').call(ctx).map(run => run.id), ['2'])
+  assert.equal(computed('cards').call(ctx)[0].status, 'failed')
+  ctx.historyGroupKey = 'a'
+  assert.deepEqual(computed('cards').call(ctx).map(run => run.id), ['2', '1'])
+  ctx.favoritesOnly = false; ctx.historyGroupKey = ''
+  ctx.runGroups = computed('runGroups').call(ctx)
+  assert.equal(ctx.runGroups.length, 3)
+  assert.equal(computed('cards').call(ctx)[2].placeholder, true)
 })
-test('dashboard groups equal titles and opens newest-first history', () => {
-  const computed = name => new Function(source.match(new RegExp(`    ${name}\\(\\) \\{([\\s\\S]*?)\\n    \\},`))[1])
-  const visibleRuns = computed('visibleRuns')
-  const runGroups = computed('runGroups')
-  const cards = computed('cards')
-  const run = (id, title, status = 'completed', hidden = false) => ({
-    id, created_at: id, finished_at: id, kind: 'simulation', status, archive: { hidden },
-    request_snapshot: { configuration: { strategy: 'Strategy', label: title } },
-  })
-  const context = {
-    jobs: [run('1', 'challenger'), run('2', 'challenger'), run('3', 'challenger', 'failed'), run('4', 'B', 'completed', true), run('5', 'C')],
-    search: '', showTrash: false, historyGroupKey: '',
-    config: row => row.request_snapshot.configuration,
-    runTitle: row => row.archive.label || row.request_snapshot.configuration.label,
-    groupKey: row => (row.archive.label || row.request_snapshot.configuration.label).toLowerCase(),
-  }
-  context.jobs[0].archive.pinned = true
-  context.visibleRuns = visibleRuns.call(context)
-  context.runGroups = runGroups.call(context)
-  assert.deepEqual(cards.call(context).map(row => row.id), ['2', '5'])
-  assert.deepEqual(context.runGroups[0].runs.map(row => row.id), ['2', '1'])
-
-  context.historyGroupKey = 'challenger'
-  assert.deepEqual(cards.call(context).map(row => row.id), ['2', '1'])
-
-  context.historyGroupKey = ''
-  context.search = '5'
-  context.visibleRuns = visibleRuns.call(context)
-  context.runGroups = runGroups.call(context)
-  assert.deepEqual(cards.call(context).map(row => row.id), ['5'])
-})
-
-test('dashboard exposes schedule state, pause and removal from each card', () => {
-  assert.match(source, /label="Schedula" @click="openSchedule\(run\)"/)
-  assert.match(source, /scheduleRow\.enabled \? "Attiva" : "In pausa"/)
-  assert.match(source, /api\.patch\(`\/dyn\/simulations\/schedules\/\$\{encodeURIComponent\(this\.scheduleRow\.id\)\}`/)
-  assert.match(source, /api\.delete\(`\/dyn\/simulations\/schedules\/\$\{encodeURIComponent\(this\.scheduleRow\.id\)\}`/)
-  assert.match(source, /run-card-shell--stacked/)
-  assert.match(source, /Chiudi storico/)
+test('schedule identity survives renames and never merges unrelated same-title runs', async () => {
+  const { scheduleForRun, latestScheduledRuns } = await import('../src/bt/utils/scheduledRuns.mjs')
+  const schedules = [{ id: 'a', source_job_id: 'seed', label: 'Renamed' }]
+  const run = (id, schedule, created) => ({ id, created_at: created, request_snapshot: { schedule_id: schedule, configuration: { label: 'Same' } } })
+  const runs = [run('seed', null, '1'), run('old', 'a', '2'), run('new', 'a', '3'), run('single', null, '4'), run('other', 'b', '5')]
+  assert.equal(scheduleForRun(runs[0], schedules).id, 'a')
+  assert.equal(scheduleForRun(runs[3], schedules), null)
+  assert.deepEqual(latestScheduledRuns(runs, schedules).map(r => r.id), ['new', 'single', 'other'])
+  assert.deepEqual(latestScheduledRuns(runs, []).map(r => r.id), ['seed', 'new', 'single', 'other'])
 })
 test('daily bar dates omit time while minute dates retain it', () => {
   const match = dataSource.match(/formatBarDate\(value, timeframe\) \{([\s\S]*?)\n    \},/)

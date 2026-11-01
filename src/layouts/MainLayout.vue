@@ -45,193 +45,36 @@
     >
     <!-- show-if-above -->
       <q-list>
-        <q-item to="/" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="dashboard"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Dashboard</q-item-label>
-          </q-item-section>
-        </q-item>
-        
-        <q-item to="/ExecuteStrategy" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="add_task"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Backtesting</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/TickerLists" active-class="navigation-active">
-          <q-item-section avatar><q-icon name="playlist_add_check" /></q-item-section>
-          <q-item-section><q-item-label>Liste ticker</q-item-label></q-item-section>
-        </q-item>
-
-        <q-item to="/Configure" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="build"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Dati ticker</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/Benchmark" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="gps_fixed"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Benchmark</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/Scheduler" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="timer"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Scheduler</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/Services" active-class="navigation-active">
-          <q-item-section avatar><q-icon name="dns" /></q-item-section>
-          <q-item-section><q-item-label>Servizi</q-item-label></q-item-section>
-        </q-item>
-        <q-expansion-item icon="hub" label="Dati di mercato" :default-opened="$route.path.startsWith('/Zmq')" expand-separator>
-          <q-item to="/Zmq/Recording" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Titoli monitorati</q-item-label></q-item-section></q-item>
-          <q-item to="/Zmq/Monitoring" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Flussi live</q-item-label></q-item-section></q-item>
-          <q-item to="/Zmq/History" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Storico</q-item-label></q-item-section></q-item>
-          <q-item to="/Zmq/Replay" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Replay</q-item-label></q-item-section></q-item>
+        <q-item to="/" exact active-class="navigation-active"><q-item-section avatar><q-icon name="dashboard" /></q-item-section><q-item-section>Dashboard</q-item-section></q-item>
+        <q-expansion-item icon="science" label="Laboratorio" :default-opened="$route.path === '/ExecuteStrategy' || $route.path === '/Laboratory/Schedules' || $route.path === '/Benchmark'" expand-separator>
+          <q-item to="/ExecuteStrategy" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Backtest e confronti</q-item-label></q-item-section></q-item>
+          <q-item to="/Laboratory/Schedules" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Backtest schedulati</q-item-label></q-item-section></q-item>
+          <q-item to="/Benchmark" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Benchmark</q-item-label></q-item-section></q-item>
         </q-expansion-item>
-
-        <q-expansion-item
-          icon="event_repeat"
-          label="Strategie Schedulate"
-          :default-opened="isScheduledRoute"
-          expand-separator
-        >
-          <q-item to="/Watchtower/CronMonitoring" active-class="navigation-active" class="q-pl-xl">
-            <q-item-section>
-              <q-item-label>Profili Cron</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item to="/ScheduledProfiles/Configuration" active-class="navigation-active" class="q-pl-xl">
-            <q-item-section>
-              <q-item-label>Configurazione</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item to="/ScheduledProfiles/Baselines" active-class="navigation-active" class="q-pl-xl">
-            <q-item-section>
-              <q-item-label>Gestione baseline</q-item-label>
-            </q-item-section>
-          </q-item>
+        <q-expansion-item icon="event_repeat" label="Strategie schedulate" :default-opened="$route.path === '/Watchtower/CronMonitoring' || $route.path === '/ScheduledProfiles/Configuration' || $route.path === '/ScheduledProfiles/Baselines'" expand-separator>
+          <q-item to="/Watchtower/CronMonitoring" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Profili</q-item-label></q-item-section></q-item>
+          <q-item to="/ScheduledProfiles/Configuration" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Configurazione</q-item-label></q-item-section></q-item>
+          <q-item to="/ScheduledProfiles/Baselines" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Gestione baseline</q-item-label></q-item-section></q-item>
         </q-expansion-item>
-
-        <q-expansion-item
-          icon="monitor_heart"
-          label="Strategie Intraday"
-          :default-opened="isIntradayRoute"
-          expand-separator
-        >
-          <q-item to="/Watchtower" active-class="navigation-active" class="q-pl-xl">
-            <q-item-section>
-              <q-item-label>Overview</q-item-label>
-            </q-item-section>
-          </q-item>
-          <q-item to="/Watchtower/FeedMonitoring" active-class="navigation-active" class="q-pl-xl">
-            <q-item-section>
-              <q-item-label>Feed Monitoring</q-item-label>
-            </q-item-section>
-          </q-item>
+        <q-expansion-item icon="monitor_heart" label="Strategie intraday" :default-opened="$route.path === '/Watchtower' || $route.path === '/Watchtower/FeedMonitoring'" expand-separator>
+          <q-item to="/Watchtower" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Monitoraggio</q-item-label></q-item-section></q-item>
+          <q-item to="/Watchtower/FeedMonitoring" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Feed</q-item-label></q-item-section></q-item>
         </q-expansion-item>
-
-        <!-- Riga di separazione -->
-        <q-separator />
-
-        <q-item to="/Alpaca" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="account_balance_wallet"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>My Portfolio</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <div v-if="false">
-        <q-item to="/Dashboard" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="dashboard"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Dashboard 21</q-item-label>
-          </q-item-section>
-        </q-item>
-        <q-item to="/Dashboard2" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="dashboard"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>CRM Dashboard</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/Directory" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="card_giftcard"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Directory</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/Charts" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="insert_chart"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Charts</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/CardHeader" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="card_giftcard"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Card Header</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/Cards" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="card_giftcard"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Cards</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/Tables" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="table_chart"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Tables</q-item-label>
-          </q-item-section>
-        </q-item>
-
-        <q-item to="/Pagination" active-class="navigation-active">
-          <q-item-section avatar>
-            <q-icon name="date_range"/>
-          </q-item-section>
-          <q-item-section>
-            <q-item-label>Pagination</q-item-label>
-          </q-item-section>
-        </q-item>
-      </div>
-
+        <q-expansion-item icon="account_balance_wallet" label="Portafoglio" :default-opened="$route.path === '/Alpaca' || $route.path === '/Zmq/Recording' || $route.path === '/Zmq/Monitoring' || $route.path === '/Zmq/History' || $route.path === '/Zmq/Replay'" expand-separator>
+          <q-item to="/Alpaca" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Il mio portafoglio</q-item-label></q-item-section></q-item>
+          <q-item to="/Zmq/Recording" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Dati di mercato · Titoli monitorati</q-item-label></q-item-section></q-item>
+          <q-item to="/Zmq/Monitoring" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Dati di mercato · Flussi live</q-item-label></q-item-section></q-item>
+          <q-item to="/Zmq/History" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Dati di mercato · Storico</q-item-label></q-item-section></q-item>
+          <q-item to="/Zmq/Replay" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Dati di mercato · Replay</q-item-label></q-item-section></q-item>
+        </q-expansion-item>
+        <q-expansion-item icon="business_center" label="Strumenti business" :default-opened="$route.path === '/TickerLists' || $route.path === '/Configure'" expand-separator>
+          <q-item to="/TickerLists" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Liste ticker</q-item-label></q-item-section></q-item>
+          <q-item to="/Configure" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Dati ticker</q-item-label></q-item-section></q-item>
+        </q-expansion-item>
+        <q-expansion-item icon="dns" label="Tecnologia" :default-opened="$route.path === '/Scheduler' || $route.path === '/Services'" expand-separator>
+          <q-item to="/Scheduler" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Scheduler</q-item-label></q-item-section></q-item>
+          <q-item to="/Services" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Servizi</q-item-label></q-item-section></q-item>
+        </q-expansion-item>
       </q-list>
     </q-drawer>
 
