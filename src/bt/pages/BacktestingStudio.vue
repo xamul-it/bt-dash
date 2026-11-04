@@ -572,7 +572,7 @@
                 <div class="col-6">Avvio<div>{{ dateTime(p.row.created_at).split(',')[0] }}</div><div>{{ dateTime(p.row.created_at).split(',').slice(1).join(',').trim() }}</div></div>
                 <div class="col-6">Periodo simulato<div>{{ p.row.request_snapshot?.configuration?.fromdate || '—' }}</div><div>{{ p.row.request_snapshot?.configuration?.todate || '—' }}</div></div>
               </div>
-              <div class="text-caption q-mb-sm">Rendimento {{ percent(p.row.result?.performance?.total_return_pct) }} · Sharpe {{ formatTradeNumber(p.row.result?.performance?.sharpe, 3) }} · Sortino {{ formatTradeNumber(p.row.result?.performance?.sortino, 3) }} · Volatilità {{ percent(p.row.result?.performance?.volatility_pct) }} · Medio/trade {{ percent(p.row.result?.performance?.average_trade_return_pct) }} · Max DD {{ percent(p.row.result?.performance?.max_drawdown_pct) }} · Leva {{ p.row.request_snapshot?.configuration?.broker?.margin_leverage ?? "—" }}</div>
+              <div class="text-caption q-mb-sm">Rendimento {{ percent(p.row.result?.performance?.total_return_pct) }} · Sharpe {{ formatTradeNumber(p.row.result?.performance?.sharpe, 3) }} · Sortino {{ formatTradeNumber(p.row.result?.performance?.sortino, 3) }} · Volatilità {{ percent(p.row.result?.performance?.volatility_pct) }} · Volatilità + {{ percent(p.row.result?.performance?.volatility_positive_pct) }} · Volatilità − {{ percent(p.row.result?.performance?.volatility_negative_pct) }} · Medio/trade {{ percent(p.row.result?.performance?.average_trade_return_pct) }} · Max DD {{ percent(p.row.result?.performance?.max_drawdown_pct) }} · Leva {{ p.row.request_snapshot?.configuration?.broker?.margin_leverage ?? "—" }}</div>
               <div class="row justify-end">
               <q-btn v-if="p.row.archive?.notes?.trim()" flat round dense size="sm"
                 icon="info_outline" color="primary" aria-label="Note del run">
@@ -878,6 +878,9 @@
       </q-card></q-dialog
     >
     <q-dialog v-model="comparisonOpen"><q-card style="width: 1100px; max-width: 96vw"><q-bar><div>Differenze parametri</div><q-space /><q-btn flat icon="close" aria-label="Chiudi confronto" v-close-popup /></q-bar><q-card-section>
+      <div class="text-subtitle2">Volatilità annua</div>
+      <div class="text-caption q-mb-sm">Le componenti + e − sono calcolate rispetto a zero su tutte le giornate e annualizzate; non si sommano alla volatilità complessiva.</div>
+      <q-markup-table flat bordered class="q-mb-md"><thead><tr><th>Metrica</th><th>Run 1</th><th>Run 2</th></tr></thead><tbody><tr v-for="metric in [['Complessiva', 'volatility_pct'], ['Positiva', 'volatility_positive_pct'], ['Negativa', 'volatility_negative_pct']]" :key="metric[1]"><td>{{ metric[0] }}</td><td v-for="selected in comparisonSelection" :key="selected.id">{{ percent((jobs.find(r => r.id === selected.id) || selected).result?.performance?.[metric[1]]) }}</td></tr></tbody></q-markup-table>
       <q-markup-table flat bordered wrap-cells class="comparison-table"><thead><tr><th>Campo</th><th><span class="comparison-number q-mr-xs">1</span>{{ runLabel(comparisonSelection[0] || {}) }}</th><th><span class="comparison-number q-mr-xs">2</span>{{ runLabel(comparisonSelection[1] || {}) }}</th></tr></thead><tbody><tr v-for="row in comparisonRows" :key="row.key" class="bg-amber-2 text-dark"><td>{{ row.key }}</td><td>{{ row.left }}</td><td>{{ row.right }}</td></tr></tbody></q-markup-table>
       <div v-if="!comparisonRows.length" class="q-pa-md">Nessuna differenza nei parametri salvati.</div>
     </q-card-section></q-card></q-dialog>
@@ -1066,6 +1069,10 @@ export default {
         { name: "sortino", label: "Sortino", field: r => r.result?.performance?.sortino ?? null,
           format: value => this.formatTradeNumber(value, 3), align: "right", sortable: true },
         { name: "volatility", label: "Volatilità annua", field: r => r.result?.performance?.volatility_pct ?? null,
+          format: value => this.percent(value), align: "right", sortable: true },
+        { name: "volatility_positive", label: "Volatilità annua +", field: r => r.result?.performance?.volatility_positive_pct ?? null,
+          format: value => this.percent(value), align: "right", sortable: true },
+        { name: "volatility_negative", label: "Volatilità annua −", field: r => r.result?.performance?.volatility_negative_pct ?? null,
           format: value => this.percent(value), align: "right", sortable: true },
         { name: "average_trade_return", label: "Rendimento medio / trade", field: r => r.result?.performance?.average_trade_return_pct ?? null,
           format: value => this.percent(value), align: "right", sortable: true },
@@ -1275,6 +1282,9 @@ export default {
           value: this.percent(p.total_return_pct),
         },
         { label: "Max drawdown", value: this.percent(p.max_drawdown_pct) },
+        { label: "Volatilità annua", value: this.percent(p.volatility_pct) },
+        { label: "Volatilità annua +", value: this.percent(p.volatility_positive_pct) },
+        { label: "Volatilità annua −", value: this.percent(p.volatility_negative_pct) },
         {
           label: "Equity finale",
           value:
