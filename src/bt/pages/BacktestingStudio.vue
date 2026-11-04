@@ -691,6 +691,10 @@
           >
           <div v-if="selectedRun.error" class="text-negative q-mt-sm">
             {{ selectedRun.error }}
+          </div>
+          <div v-if="selectedRun.done && selectedRun.kind === 'simulation'" class="row items-center q-gutter-sm q-mt-sm">
+            <span class="text-caption">Metriche: {{ metricsCacheLabel(selectedRun.metrics_cache) }}</span>
+            <q-btn flat dense icon="cached" label="Ricalcola metriche" :disable="selectedRun.metrics_cache?.status === 'updating'" @click="refreshMetrics" />
           </div></q-card-section
         >
         <q-banner v-if="error" class="bg-red-1 text-red-9 q-ma-md">{{
@@ -1616,6 +1620,20 @@ export default {
     async refreshDetail() {
       await this.poll();
       await this.loadEquity();
+    },
+    metricsCacheLabel(cache) {
+      const labels = { ready: 'aggiornate', updating: 'in aggiornamento', missing: 'non disponibili', error: 'aggiornamento non riuscito' };
+      return `${labels[cache?.status] || 'non disponibili'}${cache?.computed_at ? ` · ${this.dateTime(cache.computed_at)}` : ''}${cache?.error ? ` · ${cache.error}` : ''}`;
+    },
+    async refreshMetrics() {
+      const id = this.selectedRun?.id;
+      if (!id) return;
+      try {
+        await api.post(`${endpoint}/jobs/${id}/refresh-metrics`);
+        await this.poll();
+      } catch (e) {
+        this.error = this.message(e);
+      }
     },
     async loadEquity() {
       const id = this.selectedRun?.id;
