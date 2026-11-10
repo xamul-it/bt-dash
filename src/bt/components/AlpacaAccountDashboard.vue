@@ -54,8 +54,9 @@
           <div class="row items-center"><div class="text-subtitle1 col">Andamento del conto</div><q-toggle v-model="logarithmic" label="Scala log" dense /></div>
           <div class="text-caption text-grey-7 q-mb-sm">{{ appliedLabel || 'Applica i filtri per caricare il periodo.' }}</div>
           <q-banner v-if="historyCache.mode && historyCache.mode !== 'remote+cached'" class="bg-amber-1 q-mb-sm">
-            Storico da cache · {{ dateTime(historyCache.updated_at) }}. {{ historyCache.remote_error || '' }}
+            Parte dello storico proviene dall'archivio locale · aggiornato {{ dateTime(historyCache.updated_at) }}. La copertura può essere incompleta: sono disponibili solo i campioni salvati. {{ historyCache.remote_error || '' }}
           </q-banner>
+          <div v-if="loadedTimeframe === '5Min'" class="text-caption text-grey-7 q-mb-sm">Archivio 5 minuti: {{ points.length ? `${dateTime(points[0].timestamp)} → ${dateTime(points[points.length - 1].timestamp)} · ${points.length} campioni` : 'nessun campione disponibile' }}. Intervalli intermedi possono mancare; i dati non salvati non sono ricostruibili.</div>
           <q-select v-model="selectedSymbols" :options="symbolOptions" label="Simboli sul grafico" multiple use-chips outlined dense class="q-my-md" />
           <div class="row items-center q-gutter-md text-caption q-mb-sm" aria-label="Legenda movimenti">
             <span>▲ Ingresso</span><span>▼ Uscita</span><span># = ciclo del simbolo · nuovo numero dopo il ritorno a posizione piatta</span>
@@ -64,7 +65,8 @@
           <q-banner v-if="selectedSymbols.length && fillsTruncated" class="bg-amber-1 q-mb-sm">Marcatori parziali: limite eseguiti raggiunto.</q-banner>
           <div v-if="selectedSymbols.length && cycleStatus === 'loading'" class="text-caption text-grey-7 q-mb-sm"><q-spinner size="16px" /> Ricostruzione dei cicli di posizione…</div>
           <q-banner v-if="selectedSymbols.length && cycleError" class="bg-amber-1 q-mb-sm">{{ cycleError }}</q-banner>
-          <PortfolioEquityChart :points="points" :logarithmic="logarithmic" :currency="currency" :fills="fills" :selected-symbols="selectedSymbols || []" :orders="orders" :timeframe="loadedTimeframe" :opening-quantities="openingQuantities" :cycles-ready="cycleStatus === 'ready'" />
+          <q-banner v-if="calendarWarning" class="bg-amber-1 q-mb-sm">{{ calendarWarning }}</q-banner>
+          <PortfolioEquityChart :points="points" :calendar="tradingCalendar" :logarithmic="logarithmic" :currency="currency" :fills="fills" :selected-symbols="selectedSymbols || []" :orders="orders" :timeframe="loadedTimeframe" :opening-quantities="openingQuantities" :cycles-ready="cycleStatus === 'ready'" />
           <q-expansion-item v-if="selectedSymbols?.length" label="Dettaglio ingressi e uscite" dense class="q-mt-md">
             <q-table :rows="selectedFills" :columns="cycleFillColumns" row-key="id" flat :pagination="{ rowsPerPage: 10 }" no-data-label="Nessun eseguito per i simboli selezionati nel periodo" />
           </q-expansion-item>
@@ -129,7 +131,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { api } from 'boot/axios'
 import PortfolioEquityChart from './PortfolioEquityChart.vue'
-import { periodIndicators, periodBounds, historyWindows, loadHistoryWindows, horizonDays, validTimeframes, validPeriods, TIMEFRAME_LIMITS, symbolLegend, positionCycles, openingPositions } from '../utils/portfolioDashboard.mjs'
+import { periodIndicators, periodBounds, historyWindows, archivedHistoryWindows, defaultPortfolioContext, loadHistoryWindows, horizonDays, validTimeframes, validPeriods, TIMEFRAME_LIMITS, symbolLegend, positionCycles, openingPositions } from '../utils/portfolioDashboard.mjs'
 
 export default {
   components: { PortfolioEquityChart },
@@ -137,6 +139,7 @@ export default {
     const contexts = ref([]), selectedContext = ref(''), contextsLoading = ref(true), loading = ref(false)
     const account = ref({}), positions = ref([]), points = ref([]), orders = ref([]), fills = ref([])
     const errors = ref([]), updatedAt = ref(''), appliedLabel = ref(''), historyCache = ref({}), activitiesCache = ref({})
+    const tradingCalendar = ref({}), calendarWarning = ref('')
     const ordersTruncated = ref(false), fillsTruncated = ref(false), selectedOrder = ref(null)
     const period = ref('1W'), timeframe = ref('5Min'), session = ref('extended_hours'), logarithmic = ref(true)
     const start = ref(''), end = ref(''), tab = ref('positions'), search = ref(''), orderStatus = ref('all')
@@ -154,7 +157,7 @@ export default {
     const timeframeOptions = computed(() => validTimeframes(horizonDays(period.value, start.value, end.value)))
     const filterMessage = ref('')
     const validRange = computed(() => horizonDays(period.value, start.value, end.value) != null)
-    const timeframeGuide = computed(() => Number.isFinite(TIMEFRAME_LIMITS[timeframe.value]) ? `${timeframe.value}: fino a ${TIMEFRAME_LIMITS[timeframe.value]} giorni. Per orizzonti più lunghi scegli prima 1D. I 30 giorni sono caricati a segmenti.` : '1D: storico giornaliero. I TF intraday compaiono per orizzonti fino a 30 giorni.')
+    const timeframeGuide = computed(() => timeframe.value === '5Min' ? '5Min: oltre 30 giorni usa i campioni conservati nell’archivio locale; la copertura può essere incompleta.' : Number.isFinite(TIMEFRAME_LIMITS[timeframe.value]) ? `${timeframe.value}: fino a ${TIMEFRAME_LIMITS[timeframe.value]} giorni.` : '1D: storico giornaliero.')
     const selectedSymbols = ref([])
     const symbolOptions = computed(() => [...new Set([...positions.value.map(row => row.symbol), ...fills.value.map(row => row.symbol)])].sort())
     const symbolsLegend = computed(() => symbolLegend([...fills.value.map(row => row.symbol), ...selectedSymbols.value]).filter(row => selectedSymbols.value.includes(row.symbol)))
@@ -241,7 +244,7 @@ export default {
     const reset = () => {
       cycleVersion++; cycleController?.abort(); cycleStatus.value = 'idle'; cycleError.value = ''; openingQuantities.value = {}; loadedBounds = null
       account.value = {}; positions.value = []; points.value = []; orders.value = []; fills.value = []
-      errors.value = []; updatedAt.value = ''; appliedLabel.value = ''; historyCache.value = {}; activitiesCache.value = {}
+      errors.value = []; updatedAt.value = ''; appliedLabel.value = ''; historyCache.value = {}; activitiesCache.value = {}; tradingCalendar.value = {}; calendarWarning.value = ''
       ordersTruncated.value = false; fillsTruncated.value = false; selectedOrder.value = null
     }
     const loadAll = async () => {
@@ -252,19 +255,28 @@ export default {
       if (!selectedContext.value) return
       loading.value = true
       let bounds, tf
+      const now = new Date()
       try {
-        bounds = periodBounds(period.value, start.value, end.value)
+        bounds = periodBounds(period.value, start.value, end.value, now)
         if (!timeframeOptions.value.some(option => option.value === timeframe.value)) throw new Error('Seleziona un TF compatibile con il periodo')
         tf = timeframe.value
       } catch (error) { errors.value = [error.message]; loading.value = false; return }
       const params = { portfolio_key_id: selectedContext.value }
       const request = (path, extra = {}) => api.get(`/dyn/al/${path}`, { params: { ...params, ...extra }, signal })
-      const labels = ['Conto / posizioni', 'Equity', 'Ordini nel periodo', 'Ordini aperti', 'Eseguiti']
+      const labels = ['Conto / posizioni', 'Equity', 'Ordini nel periodo', 'Ordini aperti', 'Eseguiti', 'Calendario di trading']
       const results = await Promise.allSettled([
         request('portfolio'),
-        loadHistoryWindows(historyWindows(bounds.after, bounds.until, tf), window => request('portfolio-history', { ...window, timeframe: tf, intraday_reporting: session.value, pnl_reset: 'no_reset', prefer_cache: false }).then(response => response.data)).then(data => ({ data })),
+        loadHistoryWindows(tf === '5Min' ? archivedHistoryWindows(bounds.after, bounds.until, now.getTime()) : historyWindows(bounds.after, bounds.until, tf), async window => {
+          try {
+            return (await request('portfolio-history', { ...window, timeframe: tf, intraday_reporting: session.value, pnl_reset: 'no_reset', prefer_cache: false })).data
+          } catch (error) {
+            if (tf !== '5Min' || error.code === 'ERR_CANCELED') throw error
+            return { timeframe: tf, points: [], cache: { mode: 'local-fallback', remote_error: error.response?.data?.error || error.message } }
+          }
+        }).then(data => ({ data })),
         request('orders', { ...bounds, status: 'all' }), request('orders', { status: 'open' }),
-        request('activities', { ...bounds, activity_types: 'FILL', direction: 'asc', page_size: 100, fetch_all: true, max_pages: 50, prefer_cache: false })
+        request('activities', { ...bounds, activity_types: 'FILL', direction: 'asc', page_size: 100, fetch_all: true, max_pages: 50, prefer_cache: false }),
+        request('trading-calendar', { start: new Date(Date.parse(bounds.after) - 86400000).toISOString().slice(0, 10), end: new Date(Date.parse(bounds.until) + 86400000).toISOString().slice(0, 10) })
       ])
       if (version !== requestVersion) return
       results.forEach((result, index) => {
@@ -272,6 +284,11 @@ export default {
       })
       const data = index => results[index].status === 'fulfilled' ? results[index].value.data : null
       const portfolio = data(0), history = data(1), historical = data(2), open = data(3), executions = data(4)
+      const calendar = data(5)
+      if (calendar) {
+        tradingCalendar.value = calendar
+        if (calendar.missing_months?.length) calendarWarning.value = `Calendario non disponibile per: ${calendar.missing_months.join(', ')}. Sessioni non indicate in questi mesi.`
+      } else calendarWarning.value = 'Calendario di trading non disponibile: sessioni non indicate.'
       if (portfolio) { account.value = portfolio.account || {}; positions.value = portfolio.positions || [] }
       if (history) { points.value = history.points || []; historyCache.value = history.cache || {} }
       const merged = new Map((historical?.orders || []).map(row => [row.id, { ...row, _open: !['filled', 'canceled', 'expired', 'rejected', 'replaced', 'stopped'].includes(row.status) }]))
@@ -289,16 +306,13 @@ export default {
     }
     watch(selectedSymbols, () => { if (!loading.value) loadCycleBasis() }, { deep: true })
     const changeContext = () => {
-      try { localStorage.setItem('alpaca-account-context', selectedContext.value) } catch (_) { /* Storage may be disabled. */ }
       search.value = ''; selectedSymbols.value = []; loadAll()
     }
     onMounted(async () => {
       try {
         const response = await api.get('/dyn/al/contexts')
         contexts.value = response.data
-        let saved
-        try { saved = localStorage.getItem('alpaca-account-context') } catch (_) { /* Use first registered account. */ }
-        selectedContext.value = contexts.value.find(row => row.portfolio_key_id === saved)?.portfolio_key_id || contexts.value[0]?.portfolio_key_id || ''
+        selectedContext.value = defaultPortfolioContext(contexts.value)
         await loadAll()
       } catch (error) { errors.value = [error?.response?.data?.error || error.message] }
       finally { contextsLoading.value = false }
@@ -318,7 +332,7 @@ export default {
     onBeforeUnmount(() => clearTimeout(filterTimer))
     const sessionOptions = [{ label: 'Regolare', value: 'market_hours' }, { label: 'Premarket + after-hours', value: 'extended_hours' }, { label: 'Continua', value: 'continuous' }]
     const orderStatusOptions = [{ label: 'Tutti', value: 'all' }, { label: 'Aperti', value: 'open' }, { label: 'Chiusi', value: 'closed' }]
-    return { contexts, selectedContext, contextsLoading, loading, errors, updatedAt, context, contextOptions, currency, money, dateTime, metrics, periodMetrics, loadedTimeframe, selectedSymbols, symbolOptions, symbolsLegend, selectedFills, orders, openingQuantities, cycleStatus, cycleError, cycleFillColumns, validRange, timeframeGuide, filterMessage,
+    return { contexts, selectedContext, contextsLoading, loading, errors, updatedAt, context, contextOptions, currency, money, dateTime, metrics, periodMetrics, loadedTimeframe, selectedSymbols, symbolOptions, symbolsLegend, selectedFills, orders, openingQuantities, cycleStatus, cycleError, cycleFillColumns, validRange, timeframeGuide, filterMessage, tradingCalendar, calendarWarning,
       period, timeframe, session, start, end, periodOptions, timeframeOptions, sessionOptions, logarithmic, points, historyCache, activitiesCache, appliedLabel,
       positions, positionColumns, tab, search, visibleOrders, orderColumns, orderStatus, orderStatusOptions, ordersTruncated, fills, fillColumns, fillsTruncated,
       analysisRows, analysisColumns, selectedOrder, orderEvents, orderFills, loadAll, changeContext }

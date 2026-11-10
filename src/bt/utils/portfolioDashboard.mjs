@@ -44,7 +44,7 @@ export function historyWindows(start, end, timeframe) {
 
 export function mergeHistoryResponses(responses) {
   const points = new Map()
-  const fallback = responses.find(response => response.cache?.mode !== 'remote+cached')
+  const fallback = responses.find(response => response.cache?.mode === 'local-fallback') || responses.find(response => response.cache?.mode !== 'remote+cached')
   for (const response of responses) {
     for (const point of response.points || []) points.set(point.timestamp, point)
   }
@@ -78,7 +78,7 @@ export function periodBounds(period, start, end, now = new Date()) {
   return { after: since.toISOString(), until: now.toISOString() }
 }
 
-export const TIMEFRAME_LIMITS = { '1Min': 30, '5Min': 30, '15Min': 30, '1H': 30, '1D': Infinity }
+export const TIMEFRAME_LIMITS = { '1Min': 30, '5Min': Infinity, '15Min': 30, '1H': 30, '1D': Infinity }
 export const PERIOD_OPTIONS = [
   { label: 'Oggi', value: '1D', days: 1 }, { label: '7 giorni', value: '1W', days: 7 },
   { label: '30 giorni', value: '1M', days: 30 }, { label: '3 mesi', value: '3M', days: 90 },
@@ -91,7 +91,19 @@ export function horizonDays(period, start, end) {
 }
 export function validTimeframes(days) {
   return Object.entries(TIMEFRAME_LIMITS).filter(([, max]) => days == null || days <= max)
-    .map(([value, max]) => ({ value, label: `${value} · ${Number.isFinite(max) ? `fino a ${max} giorni` : 'storico giornaliero'}` }))
+    .map(([value, max]) => ({ value, label: `${value} · ${value === '5Min' ? 'archivio intraday' : Number.isFinite(max) ? `fino a ${max} giorni` : 'storico giornaliero'}` }))
+}
+export function defaultPortfolioContext(contexts = []) {
+  return (contexts.find(row => !row.paper && String(row.profile || '').toLowerCase() === 'live') ||
+    contexts.find(row => !row.paper) || contexts[0])?.portfolio_key_id || ''
+}
+export function archivedHistoryWindows(start, end, now = Date.now()) {
+  const first = Date.parse(start), last = Date.parse(end), cutoff = now - 30 * 86400000
+  if (!Number.isFinite(first) || !Number.isFinite(last) || last <= first) throw new Error('Intervallo storico non valido')
+  const windows = []
+  if (first < cutoff) windows.push({ start: new Date(first).toISOString(), end: new Date(Math.min(last, cutoff)).toISOString(), archive_only: true })
+  if (last > cutoff) windows.push(...historyWindows(new Date(Math.max(first, cutoff)).toISOString(), end, '5Min'))
+  return windows
 }
 export function validPeriods(timeframe) {
   return PERIOD_OPTIONS.filter(option => option.value === 'CUSTOM' || option.days <= TIMEFRAME_LIMITS[timeframe])

@@ -89,13 +89,34 @@ test('history segments are requested sequentially and a failure stops the load',
 
 test('timeframe/horizon combinations hide unsupported choices and expose actual thresholds', async () => {
   const { validPeriods, validTimeframes, horizonDays } = await utils
-  assert.deepEqual(validPeriods('5Min').map(row => row.value), ['1D', '1W', '1M', 'CUSTOM'])
-  assert.ok(validTimeframes(30).some(row => row.value === '5Min' && row.label.includes('30 giorni')))
-  assert.deepEqual(validTimeframes(31).map(row => row.value), ['1D'])
+  assert.deepEqual(validPeriods('5Min').map(row => row.value), ['1D', '1W', '1M', '3M', '1A', 'CUSTOM'])
+  assert.ok(validTimeframes(30).some(row => row.value === '5Min' && row.label.includes('archivio')))
+  assert.deepEqual(validTimeframes(31).map(row => row.value), ['5Min', '1D'])
   assert.ok(validPeriods('1D').some(row => row.value === '1A'))
   assert.equal(horizonDays('CUSTOM', '2026-01-01', '2026-01-30'), 30)
   assert.equal(horizonDays('CUSTOM', '2026-01-01', '2026-01-31'), 31)
   assert.equal(horizonDays('CUSTOM', '', ''), null)
+})
+test('5 minute history splits archive and recoverable recent interval', async () => {
+  const { archivedHistoryWindows } = await utils
+  const windows = archivedHistoryWindows('2026-01-01T00:00:00Z', '2026-03-01T00:00:00Z', Date.parse('2026-03-01T00:00:00Z'))
+  assert.equal(windows.length, 3)
+  assert.equal(windows[0].archive_only, true)
+  assert.equal(windows[0].end, windows[1].start)
+  assert.equal(windows[1].start, '2026-01-30T00:00:00.000Z')
+  assert.equal(windows[1].end, windows[2].start)
+  const recent = archivedHistoryWindows('2026-01-30T00:00:00Z', '2026-03-01T00:00:00Z', Date.parse('2026-03-01T00:00:00Z'))
+  assert.equal(recent.length, 2)
+  assert.ok(recent.every(window => !window.archive_only))
+  assert.equal(recent[0].start, '2026-01-30T00:00:00.000Z')
+})
+test('portfolio opens on live even when paper is listed first', async () => {
+  const { defaultPortfolioContext } = await utils
+  const contexts = [{ portfolio_key_id: 'paper', paper: true }, { portfolio_key_id: 'real', paper: false }, { portfolio_key_id: 'live', paper: false, profile: 'live' }]
+  assert.equal(defaultPortfolioContext(contexts), 'live')
+  assert.equal(defaultPortfolioContext(contexts.slice(0, 2)), 'real')
+  assert.equal(defaultPortfolioContext(contexts.slice(0, 1)), 'paper')
+  assert.equal(defaultPortfolioContext([]), '')
 })
 test('period indicators measure daily averages and actual elapsed drawdown duration', async () => {
   const { periodIndicators } = await utils

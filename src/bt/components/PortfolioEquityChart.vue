@@ -10,15 +10,16 @@
     <div v-if="selectedCount > markers.length" class="text-caption text-orange-9">{{ selectedCount - markers.length }} movimenti fuori dalla copertura equity.</div>
     <div v-for="event in events" :key="event.id" class="text-caption q-mt-xs" :style="{ color: event.color }">{{ event.fill.symbol }} #{{ event.cycle }} · {{ event.action }} · {{ date(Date.parse(event.fill.timestamp) / 1000) }} · {{ event.fill.qty }} @ {{ money(event.fill.price) }}</div>
     <div v-if="!stats.series.length" class="text-grey-7 q-pa-md">Nessun campione equity disponibile nel periodo.</div>
-    <div class="text-caption text-grey-7 q-mt-sm">Equity sopra · drawdown sotto · orari America/New_York · <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView</a></div>
+    <div class="text-caption text-grey-7 q-mt-sm">Equity sopra · drawdown sotto · sessioni dal calendario di trading locale · orari America/New_York · <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView</a></div>
   </div>
 </template>
 <script>
 import { computed, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { createChart, LineSeries, HistogramSeries, PriceScaleMode, createSeriesMarkers } from 'lightweight-charts'
 import { equityStatistics, executionMarkers, positionCycles } from '../utils/portfolioDashboard.mjs'
+import { sessionBoundaries, sessionLines, sessionShading } from '../utils/portfolioSessions.mjs'
 export default {
-  props: { points: { type: Array, default: () => [] }, logarithmic: Boolean, timeframe: { type: String, default: '5Min' }, currency: { type: String, default: 'USD' }, fills: { type: Array, default: () => [] }, selectedSymbols: { type: Array, default: () => [] }, orders: { type: Array, default: () => [] }, openingQuantities: { type: Object, default: () => ({}) }, cyclesReady: { type: Boolean, default: true } },
+  props: { points: { type: Array, default: () => [] }, calendar: { type: Object, default: () => ({}) }, logarithmic: Boolean, timeframe: { type: String, default: '5Min' }, currency: { type: String, default: 'USD' }, fills: { type: Array, default: () => [] }, selectedSymbols: { type: Array, default: () => [] }, orders: { type: Array, default: () => [] }, openingQuantities: { type: Object, default: () => ({}) }, cyclesReady: { type: Boolean, default: true } },
   setup(props) {
     const container = ref(null)
     const legend = ref({})
@@ -46,6 +47,10 @@ export default {
       equity.priceScale().applyOptions({ mode: props.logarithmic && stats.value.series.every(p => p.value > 0) ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal })
       const dd = chart.addSeries(HistogramSeries, { color: '#ef9a9a', priceFormat: { type: 'custom', formatter: v => `${v.toFixed(2)}%` } }, 1)
       dd.setData(stats.value.drawdown)
+      const boundaries = sessionBoundaries(stats.value.series, props.timeframe, props.calendar)
+      const sessions = sessionShading(stats.value.series, props.timeframe, props.calendar)
+      equity.attachPrimitive(sessionLines(chart, boundaries, true, sessions))
+      dd.attachPrimitive(sessionLines(chart, boundaries, false, sessions))
       dd.priceScale().applyOptions({ mode: PriceScaleMode.Normal })
       chart.panes()[1]?.setHeight(100)
       const update = (time, e, d) => { legend.value = { date: date(time), equity: e, drawdown: d } }
@@ -69,7 +74,7 @@ export default {
       observer.observe(container.value)
       render()
     })
-    watch([stats, markers, () => props.logarithmic, () => props.currency], render)
+    watch([stats, markers, () => props.logarithmic, () => props.currency, () => props.timeframe, () => props.calendar], render)
     onBeforeUnmount(() => { observer?.disconnect(); markerPlugin?.detach(); chart?.remove(); chart = null })
     return { container, legend, stats, money, markers, events, selectedCount, date }
   }
