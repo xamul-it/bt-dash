@@ -2,7 +2,7 @@
   <div>
     <div class="row q-gutter-md text-caption q-mb-sm" aria-live="polite">
       <strong>{{ legend.date }}</strong>
-      <span>Equity {{ money(legend.equity) }}</span>
+      <span>{{ normalized ? 'Base 100' : 'Equity' }} {{ normalized ? (legend.equity == null ? '—' : legend.equity.toFixed(2)) : money(legend.equity) }}</span>
       <span>Drawdown {{ legend.drawdown == null ? '—' : `${legend.drawdown.toFixed(2)}%` }}</span>
     </div>
     <div ref="container" style="height: 420px" role="img" aria-label="Equity del conto e drawdown nel periodo" />
@@ -10,7 +10,7 @@
     <div v-if="selectedCount > markers.length" class="text-caption text-orange-9">{{ selectedCount - markers.length }} movimenti fuori dalla copertura equity.</div>
     <div v-for="event in events" :key="event.id" class="text-caption q-mt-xs" :style="{ color: event.color }">{{ event.fill.symbol }} #{{ event.cycle }} · {{ event.action }} · {{ date(Date.parse(event.fill.timestamp) / 1000) }} · {{ event.fill.qty }} @ {{ money(event.fill.price) }}</div>
     <div v-if="!stats.series.length" class="text-grey-7 q-pa-md">Nessun campione equity disponibile nel periodo.</div>
-    <div class="text-caption text-grey-7 q-mt-sm">Equity sopra · drawdown sotto · sessioni dal calendario di trading locale · orari America/New_York · <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView</a></div>
+    <div class="text-caption text-grey-7 q-mt-sm">{{ normalized ? 'Rendimento base 100' : 'Equity reale' }} sopra · drawdown sotto · sessioni dal calendario di trading locale · orari America/New_York · <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView</a></div>
   </div>
 </template>
 <script>
@@ -19,7 +19,7 @@ import { createChart, LineSeries, HistogramSeries, PriceScaleMode, createSeriesM
 import { equityStatistics, executionMarkers, positionCycles } from '../utils/portfolioDashboard.mjs'
 import { sessionBoundaries, sessionLines, sessionShading } from '../utils/portfolioSessions.mjs'
 export default {
-  props: { points: { type: Array, default: () => [] }, calendar: { type: Object, default: () => ({}) }, logarithmic: Boolean, timeframe: { type: String, default: '5Min' }, currency: { type: String, default: 'USD' }, fills: { type: Array, default: () => [] }, selectedSymbols: { type: Array, default: () => [] }, orders: { type: Array, default: () => [] }, openingQuantities: { type: Object, default: () => ({}) }, cyclesReady: { type: Boolean, default: true } },
+  props: { normalized: Boolean, points: { type: Array, default: () => [] }, calendar: { type: Object, default: () => ({}) }, logarithmic: Boolean, timeframe: { type: String, default: '5Min' }, currency: { type: String, default: 'USD' }, fills: { type: Array, default: () => [] }, selectedSymbols: { type: Array, default: () => [] }, orders: { type: Array, default: () => [] }, openingQuantities: { type: Object, default: () => ({}) }, cyclesReady: { type: Boolean, default: true } },
   setup(props) {
     const container = ref(null)
     const legend = ref({})

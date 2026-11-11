@@ -51,7 +51,7 @@
               </q-card-section></q-card>
             </div>
           </div>
-          <div class="row items-center"><div class="text-subtitle1 col">Andamento del conto</div><q-toggle v-model="logarithmic" label="Scala log" dense /></div>
+          <div class="row items-center q-gutter-sm"><div class="text-subtitle1 col">Andamento del conto</div><q-btn-toggle v-model="chartMode" toggle-color="primary" :options="[{ label: 'Rendimento base 100', value: 'normalized' }, { label: 'Equity reale', value: 'equity' }]" /><q-toggle v-model="logarithmic" label="Scala log" dense /></div>
           <div class="text-caption text-grey-7 q-mb-sm">{{ appliedLabel || 'Applica i filtri per caricare il periodo.' }}</div>
           <q-banner v-if="historyCache.mode && historyCache.mode !== 'remote+cached'" class="bg-amber-1 q-mb-sm">
             Parte dello storico proviene dall'archivio locale · aggiornato {{ dateTime(historyCache.updated_at) }}. La copertura può essere incompleta: sono disponibili solo i campioni salvati. {{ historyCache.remote_error || '' }}
@@ -66,11 +66,13 @@
           <div v-if="selectedSymbols.length && cycleStatus === 'loading'" class="text-caption text-grey-7 q-mb-sm"><q-spinner size="16px" /> Ricostruzione dei cicli di posizione…</div>
           <q-banner v-if="selectedSymbols.length && cycleError" class="bg-amber-1 q-mb-sm">{{ cycleError }}</q-banner>
           <q-banner v-if="calendarWarning" class="bg-amber-1 q-mb-sm">{{ calendarWarning }}</q-banner>
-          <PortfolioEquityChart :points="points" :calendar="tradingCalendar" :logarithmic="logarithmic" :currency="currency" :fills="fills" :selected-symbols="selectedSymbols || []" :orders="orders" :timeframe="loadedTimeframe" :opening-quantities="openingQuantities" :cycles-ready="cycleStatus === 'ready'" />
+          <q-banner v-if="performance.reason" class="bg-amber-1 q-mb-sm">{{ performance.reason }} Le metriche normalizzate non sono disponibili; puoi consultare l’equity reale.</q-banner>
+          <q-banner v-else-if="performance.estimated" class="bg-amber-1 q-mb-sm">Rendimento stimato: i flussi sono attribuiti ai campioni equity disponibili; quando Alpaca fornisce solo la data, si usa l’ultimo campione della giornata o il primo successivo. L’orario effettivo può cambiare il risultato e la curva intraday.</q-banner>
+          <PortfolioEquityChart :points="chartMode === 'normalized' ? performance.points : points" :normalized="chartMode === 'normalized'" :calendar="tradingCalendar" :logarithmic="logarithmic" :currency="currency" :fills="fills" :selected-symbols="selectedSymbols || []" :orders="orders" :timeframe="loadedTimeframe" :opening-quantities="openingQuantities" :cycles-ready="cycleStatus === 'ready'" />
           <q-expansion-item v-if="selectedSymbols?.length" label="Dettaglio ingressi e uscite" dense class="q-mt-md">
             <q-table :rows="selectedFills" :columns="cycleFillColumns" row-key="id" flat :pagination="{ rowsPerPage: 10 }" no-data-label="Nessun eseguito per i simboli selezionati nel periodo" />
           </q-expansion-item>
-          <div class="text-caption text-grey-7 q-mt-md">Campioni equity del broker, non barre OHLC. Variazione e drawdown descrivono il valore del conto e possono risentire di versamenti e prelievi; non sono rendimenti depurati dai flussi.</div>
+          <div class="text-caption text-grey-7 q-mt-md">Campioni equity del broker, non barre OHLC. La curva base 100 esclude i movimenti di capitale identificati; dividendi, tasse e commissioni restano nella performance. Il drawdown del grafico segue la vista selezionata.</div>
         </q-card-section>
       </q-card>
       <q-card flat bordered>
@@ -131,7 +133,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { api } from 'boot/axios'
 import PortfolioEquityChart from './PortfolioEquityChart.vue'
-import { periodIndicators, periodBounds, historyWindows, archivedHistoryWindows, defaultPortfolioContext, loadHistoryWindows, horizonDays, validTimeframes, validPeriods, TIMEFRAME_LIMITS, symbolLegend, positionCycles, openingPositions } from '../utils/portfolioDashboard.mjs'
+import { normalizedPerformance, periodIndicators, periodBounds, historyWindows, archivedHistoryWindows, defaultPortfolioContext, loadHistoryWindows, horizonDays, validTimeframes, validPeriods, TIMEFRAME_LIMITS, symbolLegend, positionCycles, openingPositions } from '../utils/portfolioDashboard.mjs'
 
 export default {
   components: { PortfolioEquityChart },
@@ -140,6 +142,7 @@ export default {
     const account = ref({}), positions = ref([]), points = ref([]), orders = ref([]), fills = ref([])
     const errors = ref([]), updatedAt = ref(''), appliedLabel = ref(''), historyCache = ref({}), activitiesCache = ref({})
     const tradingCalendar = ref({}), calendarWarning = ref('')
+    const capitalActivities = ref([]), capitalComplete = ref(false), chartMode = ref('normalized')
     const ordersTruncated = ref(false), fillsTruncated = ref(false), selectedOrder = ref(null)
     const period = ref('1W'), timeframe = ref('5Min'), session = ref('extended_hours'), logarithmic = ref(true)
     const start = ref(''), end = ref(''), tab = ref('positions'), search = ref(''), orderStatus = ref('all')
@@ -152,7 +155,8 @@ export default {
     const money = value => number(value) == null ? '—' : new Intl.NumberFormat('it-IT', { style: 'currency', currency: currency.value }).format(Number(value))
     const dateTime = value => !value || !Number.isFinite(Date.parse(value)) ? '—' : new Intl.DateTimeFormat('it-IT', { timeZone: 'America/New_York', dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value))
     const loadedTimeframe = ref('5Min')
-    const stats = computed(() => periodIndicators(points.value, loadedTimeframe.value))
+    const performance = computed(() => normalizedPerformance(points.value, capitalActivities.value, capitalComplete.value))
+    const stats = computed(() => periodIndicators(performance.value.points, loadedTimeframe.value))
     const periodOptions = computed(() => validPeriods(timeframe.value))
     const timeframeOptions = computed(() => validTimeframes(horizonDays(period.value, start.value, end.value)))
     const filterMessage = ref('')
@@ -210,14 +214,13 @@ export default {
       { label: 'Posizioni aperte', value: Object.keys(account.value).length ? positions.value.length : '—' }
     ])
     const periodMetrics = computed(() => [
-      { label: 'P&L equity nel periodo', value: money(stats.value.pnl), help: 'Ultima equity meno prima equity del periodo. Include gli effetti di versamenti e prelievi; non è il P&L realizzato dei trade.' },
-      { label: 'Variazione equity %', value: percent(stats.value.returnPct), help: 'Variazione rispetto alla prima equity caricata, senza correzione per flussi esterni.' },
-      { label: 'DD massimo %', value: percent(stats.value.maxDrawdown), help: 'Peggiore discesa rispetto al massimo progressivo nel periodo; usa i campioni del TF caricato.' },
-      { label: 'DD massimo in valuta', value: money(stats.value.maxDrawdownCash), help: 'Massima perdita di equity dal picco progressivo, in valuta del conto.' },
-      { label: 'DD days · massimo', value: duration(stats.value.ddDays), help: 'Durata massima dal picco al recupero o all’ultimo campione per un episodio aperto. Giorni di calendario, weekend compresi; picco cercato nel periodo.' },
-      { label: 'DD days · attuale', value: duration(stats.value.currentDdDays), help: 'Tempo dall’ultimo massimo raggiunto nel periodo all’ultimo campione, se ancora in drawdown. Giorni di calendario.' },
-      { label: 'Media per giorno', value: money(stats.value.averageDay), help: `Media delle variazioni giornaliere sui ${stats.value.sessions} intervalli osservati (America/New_York). Intraday: primo giorno dal primo campione, ultimo giorno anche parziale; 1D: primo campione usato come base.` },
-      { label: 'Media giornaliera %', value: percent(stats.value.averageDayPct), help: 'Media aritmetica delle variazioni percentuali giornaliere osservate; non annualizzata e non corretta per flussi esterni.' }
+      { label: 'Risultato economico', value: money(performance.value.pnl), help: 'Equity finale meno equity iniziale e apporti netti; include dividendi, tasse e commissioni.' },
+      { label: 'Apporti netti', value: money(performance.value.flows), help: 'Versamenti meno prelievi nel periodo tra i campioni equity.' },
+      { label: 'Rendimento %', value: percent(stats.value.returnPct), help: 'Rendimento concatenato, corretto per i flussi esterni. Può essere stimato quando è disponibile solo la data del movimento.' },
+      { label: 'DD massimo %', value: percent(stats.value.maxDrawdown), help: 'Peggiore discesa dal massimo della curva normalizzata nel periodo.' },
+      { label: 'DD days · massimo', value: duration(stats.value.ddDays), help: 'Durata massima dal picco al recupero o all’ultimo campione, in giorni di calendario.' },
+      { label: 'DD days · attuale', value: duration(stats.value.currentDdDays), help: 'Tempo dall’ultimo massimo della curva normalizzata, in giorni di calendario.' },
+      { label: 'Media giornaliera %', value: percent(stats.value.averageDayPct), help: 'Media aritmetica dei rendimenti giornalieri osservati sulla curva normalizzata.' }
     ])
     const numericColumn = (name, label, monetary = false) => ({ name, label, field: row => number(row[name]), align: 'right', sortable: true, format: monetary ? money : value => value ?? '—' })
     const column = (name, label, format) => ({ name, label, field: name, align: 'left', sortable: true, ...(format ? { format } : {}) })
@@ -243,7 +246,7 @@ export default {
       .filter(([key]) => selectedOrder.value?.[key]).map(([key, label]) => ({ label, time: selectedOrder.value[key] })).sort((a, b) => Date.parse(a.time) - Date.parse(b.time)))
     const reset = () => {
       cycleVersion++; cycleController?.abort(); cycleStatus.value = 'idle'; cycleError.value = ''; openingQuantities.value = {}; loadedBounds = null
-      account.value = {}; positions.value = []; points.value = []; orders.value = []; fills.value = []
+      account.value = {}; positions.value = []; points.value = []; orders.value = []; fills.value = []; capitalActivities.value = []; capitalComplete.value = false
       errors.value = []; updatedAt.value = ''; appliedLabel.value = ''; historyCache.value = {}; activitiesCache.value = {}; tradingCalendar.value = {}; calendarWarning.value = ''
       ordersTruncated.value = false; fillsTruncated.value = false; selectedOrder.value = null
     }
@@ -263,7 +266,7 @@ export default {
       } catch (error) { errors.value = [error.message]; loading.value = false; return }
       const params = { portfolio_key_id: selectedContext.value }
       const request = (path, extra = {}) => api.get(`/dyn/al/${path}`, { params: { ...params, ...extra }, signal })
-      const labels = ['Conto / posizioni', 'Equity', 'Ordini nel periodo', 'Ordini aperti', 'Eseguiti', 'Calendario di trading']
+      const labels = ['Conto / posizioni', 'Equity', 'Ordini nel periodo', 'Ordini aperti', 'Eseguiti', 'Calendario di trading', 'Movimenti di capitale']
       const results = await Promise.allSettled([
         request('portfolio'),
         loadHistoryWindows(tf === '5Min' ? archivedHistoryWindows(bounds.after, bounds.until, now.getTime()) : historyWindows(bounds.after, bounds.until, tf), async window => {
@@ -276,7 +279,8 @@ export default {
         }).then(data => ({ data })),
         request('orders', { ...bounds, status: 'all' }), request('orders', { status: 'open' }),
         request('activities', { ...bounds, activity_types: 'FILL', direction: 'asc', page_size: 100, fetch_all: true, max_pages: 50, prefer_cache: false }),
-        request('trading-calendar', { start: new Date(Date.parse(bounds.after) - 86400000).toISOString().slice(0, 10), end: new Date(Date.parse(bounds.until) + 86400000).toISOString().slice(0, 10) })
+        request('trading-calendar', { start: new Date(Date.parse(bounds.after) - 86400000).toISOString().slice(0, 10), end: new Date(Date.parse(bounds.until) + 86400000).toISOString().slice(0, 10) }),
+        request('activities', { activity_types: 'CSD,CSW,ACATC,ACATS,FOPT,JNLC,JNLS,JNL', direction: 'asc', page_size: 100, fetch_all: true, max_pages: 100, prefer_cache: false })
       ])
       if (version !== requestVersion) return
       results.forEach((result, index) => {
@@ -284,7 +288,8 @@ export default {
       })
       const data = index => results[index].status === 'fulfilled' ? results[index].value.data : null
       const portfolio = data(0), history = data(1), historical = data(2), open = data(3), executions = data(4)
-      const calendar = data(5)
+      const calendar = data(5), capital = data(6)
+      if (capital) { capitalActivities.value = capital.activities || []; capitalComplete.value = !capital.truncated && capital.cache?.mode === 'remote+cached' }
       if (calendar) {
         tradingCalendar.value = calendar
         if (calendar.missing_months?.length) calendarWarning.value = `Calendario non disponibile per: ${calendar.missing_months.join(', ')}. Sessioni non indicate in questi mesi.`
@@ -333,7 +338,7 @@ export default {
     const sessionOptions = [{ label: 'Regolare', value: 'market_hours' }, { label: 'Premarket + after-hours', value: 'extended_hours' }, { label: 'Continua', value: 'continuous' }]
     const orderStatusOptions = [{ label: 'Tutti', value: 'all' }, { label: 'Aperti', value: 'open' }, { label: 'Chiusi', value: 'closed' }]
     return { contexts, selectedContext, contextsLoading, loading, errors, updatedAt, context, contextOptions, currency, money, dateTime, metrics, periodMetrics, loadedTimeframe, selectedSymbols, symbolOptions, symbolsLegend, selectedFills, orders, openingQuantities, cycleStatus, cycleError, cycleFillColumns, validRange, timeframeGuide, filterMessage, tradingCalendar, calendarWarning,
-      period, timeframe, session, start, end, periodOptions, timeframeOptions, sessionOptions, logarithmic, points, historyCache, activitiesCache, appliedLabel,
+      performance, chartMode, period, timeframe, session, start, end, periodOptions, timeframeOptions, sessionOptions, logarithmic, points, historyCache, activitiesCache, appliedLabel,
       positions, positionColumns, tab, search, visibleOrders, orderColumns, orderStatus, orderStatusOptions, ordersTruncated, fills, fillColumns, fillsTruncated,
       analysisRows, analysisColumns, selectedOrder, orderEvents, orderFills, loadAll, changeContext }
   }

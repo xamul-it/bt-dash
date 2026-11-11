@@ -9,6 +9,53 @@ export function historySeries(points = []) {
   return [...unique.values()].sort((a, b) => a.time - b.time)
 }
 
+// Non-trade activities often provide only a settlement date. Assign such flows to
+// the final available sample on that New York date; this is an approximation.
+export function normalizedPerformance(points = [], activities = [], complete = false) {
+  const series = historySeries(points)
+  const unavailable = reason => ({ points: [], pnl: null, flows: null, reason, estimated: false })
+  if (!complete) return unavailable('Movimenti di capitale incompleti o non disponibili.')
+  if (series.length < 2 || series[0].value <= 0) return unavailable('Servono almeno due campioni e un capitale iniziale positivo.')
+  const firstDay = tradingDay(series[0].time), lastDay = tradingDay(series.at(-1).time)
+  const adjustments = new Map()
+  let net = 0, estimated = false
+  for (const activity of activities) {
+    const raw = activity.raw || activity
+    const date = raw.date || activity.timestamp
+    if (!date || !Number.isFinite(Date.parse(date))) return unavailable('Un movimento non ha una data valida.')
+    const day = String(date).slice(0, 10)
+    if (day < firstDay || day > lastDay) continue
+    if (['ACATS', 'FOPT', 'JNLS', 'JNL', 'JNLC'].includes(activity.activity_type)) return unavailable(`Movimento ${activity.activity_type} da classificare: rendimento non disponibile.`)
+    if (!['CSD', 'CSW', 'ACATC'].includes(activity.activity_type)) continue
+    const amount = Number(activity.notional ?? raw.net_amount)
+    if ((activity.notional == null && raw.net_amount == null) || !Number.isFinite(amount)) return unavailable('Un movimento di capitale non ha un importo valido.')
+    const exact = /T\d\d:\d\d/.test(String(date))
+    estimated = true
+    if (!exact && day === firstDay) return unavailable('Un movimento coincide con il primo giorno: manca una base precedente affidabile.')
+    let index = -1
+    if (exact) index = series.findIndex(row => row.time * 1000 >= Date.parse(date))
+    else {
+      for (let i = 1; i < series.length; i++) if (tradingDay(series[i].time) <= day) index = i
+      if (index < 1 || tradingDay(series[index].time) < day) index = series.findIndex((row, i) => i > 0 && tradingDay(row.time) > day)
+      estimated = true
+    }
+    if (index === 0) return unavailable('Un movimento precede o coincide con il primo campione.')
+    if (index < 0) return unavailable('Manca un campione successivo a un movimento di capitale.')
+    adjustments.set(index, (adjustments.get(index) || 0) + amount)
+    net += amount
+  }
+  let value = 100
+  const normalized = [{ timestamp: new Date(series[0].time * 1000).toISOString(), equity: value }]
+  for (let i = 1; i < series.length; i++) {
+    const previous = series[i - 1].value
+    if (previous <= 0) return unavailable('Equity non positiva: rendimento normalizzato non calcolabile.')
+    value *= (series[i].value - (adjustments.get(i) || 0)) / previous
+    if (!Number.isFinite(value) || value < 0) return unavailable('Flussi incompatibili con i campioni equity disponibili.')
+    normalized.push({ timestamp: new Date(series[i].time * 1000).toISOString(), equity: value })
+  }
+  return { points: normalized, pnl: series.at(-1).value - series[0].value - net, flows: net, estimated, reason: '' }
+}
+
 export function equityStatistics(points = []) {
   const series = historySeries(points)
   let peak = -Infinity

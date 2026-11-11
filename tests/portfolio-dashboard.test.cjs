@@ -207,3 +207,27 @@ test('opening inventory preserves a cycle already open before the displayed rang
   ], seed)
   assert.deepEqual(rows.map(row => [row.action, row.cycle]), [['Uscita', 1], ['Ingresso', 2]])
 })
+
+test('normalized performance excludes cash contributions and withdrawals but retains investment results', async () => {
+  const { normalizedPerformance, periodIndicators } = await utils
+  const points = [10000, 11000, 21000, 23100, 18100].map((equity, index) => ({ timestamp: `2026-10-${20 + index}T20:00:00Z`, equity }))
+  const movements = [
+    { activity_type: 'CSD', notional: 10000, raw: { date: '2026-10-22', net_amount: '10000' } },
+    { activity_type: 'CSW', notional: -5000, raw: { date: '2026-10-24', net_amount: '-5000' } }
+  ]
+  const result = normalizedPerformance(points, movements, true)
+  assert.equal(result.flows, 5000)
+  assert.equal(result.pnl, 3100)
+  assert.ok(Math.abs(periodIndicators(result.points, '1D').returnPct - 21) < 1e-9)
+  assert.equal(result.estimated, true)
+  assert.deepEqual(result.points.map(p => Math.round(p.equity)), [100, 110, 110, 121, 121])
+})
+
+test('normalized performance refuses incomplete or ambiguous capital data', async () => {
+  const { normalizedPerformance } = await utils
+  const points = [{ timestamp: '2026-10-20T20:00:00Z', equity: 100 }, { timestamp: '2026-10-21T20:00:00Z', equity: 110 }]
+  assert.match(normalizedPerformance(points, [], false).reason, /incompleti/)
+  assert.match(normalizedPerformance(points, [{ activity_type: 'CSD', notional: 10, raw: { date: '2026-10-20' } }], true).reason, /primo giorno/)
+  assert.match(normalizedPerformance(points, [{ activity_type: 'ACATS', raw: { date: '2026-10-21' } }], true).reason, /classificare/)
+  assert.equal(normalizedPerformance(points, [], true).points.at(-1).equity, 110.00000000000001)
+})
