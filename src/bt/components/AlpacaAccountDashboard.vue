@@ -67,7 +67,7 @@
           <q-banner v-if="selectedSymbols.length && cycleError" class="bg-amber-1 q-mb-sm">{{ cycleError }}</q-banner>
           <q-banner v-if="calendarWarning" class="bg-amber-1 q-mb-sm">{{ calendarWarning }}</q-banner>
           <q-banner v-if="performance.reason" class="bg-amber-1 q-mb-sm">{{ performance.reason }} Le metriche normalizzate non sono disponibili; puoi consultare l’equity reale.</q-banner>
-          <q-banner v-else-if="performance.estimated" class="bg-amber-1 q-mb-sm">Rendimento stimato: i flussi sono attribuiti ai campioni equity disponibili; quando Alpaca fornisce solo la data, si usa l’ultimo campione della giornata o il primo successivo. L’orario effettivo può cambiare il risultato e la curva intraday.</q-banner>
+          <q-banner v-else-if="performance.estimated" class="bg-amber-1 q-mb-sm">Rendimento stimato: i flussi sono attribuiti ai campioni equity disponibili. Per i movimenti senza orario, il campione intraday viene individuato confrontando il salto di equity con l’importo; con dati giornalieri si usa il primo campione disponibile dalla data del movimento.</q-banner>
           <PortfolioEquityChart :points="chartMode === 'normalized' ? performance.points : points" :normalized="chartMode === 'normalized'" :calendar="tradingCalendar" :logarithmic="logarithmic" :currency="currency" :fills="fills" :selected-symbols="selectedSymbols || []" :orders="orders" :timeframe="loadedTimeframe" :opening-quantities="openingQuantities" :cycles-ready="cycleStatus === 'ready'" />
           <q-expansion-item v-if="selectedSymbols?.length" label="Dettaglio ingressi e uscite" dense class="q-mt-md">
             <q-table :rows="selectedFills" :columns="cycleFillColumns" row-key="id" flat :pagination="{ rowsPerPage: 10 }" no-data-label="Nessun eseguito per i simboli selezionati nel periodo" />
@@ -144,7 +144,7 @@ export default {
     const tradingCalendar = ref({}), calendarWarning = ref('')
     const capitalActivities = ref([]), capitalComplete = ref(false), chartMode = ref('normalized')
     const ordersTruncated = ref(false), fillsTruncated = ref(false), selectedOrder = ref(null)
-    const period = ref('1W'), timeframe = ref('5Min'), session = ref('extended_hours'), logarithmic = ref(true)
+    const period = ref('1W'), timeframe = ref('5Min'), session = ref('continuous'), logarithmic = ref(true)
     const start = ref(''), end = ref(''), tab = ref('positions'), search = ref(''), orderStatus = ref('all')
     let requestVersion = 0, controller
     const context = computed(() => contexts.value.find(row => row.portfolio_key_id === selectedContext.value))
@@ -155,7 +155,7 @@ export default {
     const money = value => number(value) == null ? '—' : new Intl.NumberFormat('it-IT', { style: 'currency', currency: currency.value }).format(Number(value))
     const dateTime = value => !value || !Number.isFinite(Date.parse(value)) ? '—' : new Intl.DateTimeFormat('it-IT', { timeZone: 'America/New_York', dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value))
     const loadedTimeframe = ref('5Min')
-    const performance = computed(() => normalizedPerformance(points.value, capitalActivities.value, capitalComplete.value))
+    const performance = computed(() => normalizedPerformance(points.value, capitalActivities.value, capitalComplete.value, loadedTimeframe.value))
     const stats = computed(() => periodIndicators(performance.value.points, loadedTimeframe.value))
     const periodOptions = computed(() => validPeriods(timeframe.value))
     const timeframeOptions = computed(() => validTimeframes(horizonDays(period.value, start.value, end.value)))

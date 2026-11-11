@@ -9,9 +9,9 @@ export function historySeries(points = []) {
   return [...unique.values()].sort((a, b) => a.time - b.time)
 }
 
-// Non-trade activities often provide only a settlement date. Assign such flows to
-// the final available sample on that New York date; this is an approximation.
-export function normalizedPerformance(points = [], activities = [], complete = false) {
+// Date-only cash movements require an identifiable equity jump; do not invent
+// intraday values when the available samples cannot locate the flow.
+export function normalizedPerformance(points = [], activities = [], complete = false, timeframe = '5Min') {
   const series = historySeries(points)
   const unavailable = reason => ({ points: [], pnl: null, flows: null, reason, estimated: false })
   if (!complete) return unavailable('Movimenti di capitale incompleti o non disponibili.')
@@ -34,10 +34,24 @@ export function normalizedPerformance(points = [], activities = [], complete = f
     if (!exact && day === firstDay) return unavailable('Un movimento coincide con il primo giorno: manca una base precedente affidabile.')
     let index = -1
     if (exact) index = series.findIndex(row => row.time * 1000 >= Date.parse(date))
-    else {
-      for (let i = 1; i < series.length; i++) if (tradingDay(series[i].time) <= day) index = i
-      if (index < 1 || tradingDay(series[index].time) < day) index = series.findIndex((row, i) => i > 0 && tradingDay(row.time) > day)
-      estimated = true
+    else if (timeframe === '1D') {
+      index = series.findIndex((row, i) => i > 0 && tradingDay(row.time) >= day)
+    } else {
+      // The activity date can be a settlement date, so created_at alone is not
+      // proof of when equity changed. Match the actual jump to the cash flow.
+      const candidates = []
+      for (let i = 1; i < series.length; i++) {
+        if (tradingDay(series[i].time) !== day || adjustments.has(i)) continue
+        const previous = series[i - 1].value
+        const distance = Math.abs(series[i].value - previous - amount)
+        const tolerance = Math.max(Math.abs(amount) * 0.1, Math.min(Math.abs(previous) * 0.002, Math.abs(amount) * 0.25))
+        if (distance <= tolerance) candidates.push({ index: i, distance })
+      }
+      candidates.sort((a, b) => a.distance - b.distance)
+      if (!candidates.length || (candidates.length > 1 && candidates[1].distance - candidates[0].distance < Math.abs(amount) * 0.02)) {
+        return unavailable('Impossibile individuare con affidabilità il campione del movimento di capitale.')
+      }
+      index = candidates[0].index
     }
     if (index === 0) return unavailable('Un movimento precede o coincide con il primo campione.')
     if (index < 0) return unavailable('Manca un campione successivo a un movimento di capitale.')

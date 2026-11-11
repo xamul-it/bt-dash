@@ -231,3 +231,30 @@ test('normalized performance refuses incomplete or ambiguous capital data', asyn
   assert.match(normalizedPerformance(points, [{ activity_type: 'ACATS', raw: { date: '2026-10-21' } }], true).reason, /classificare/)
   assert.equal(normalizedPerformance(points, [], true).points.at(-1).equity, 110.00000000000001)
 })
+
+test('date-only deposit is removed at the matching intraday equity jump', async () => {
+  const { normalizedPerformance } = await utils
+  const points = [
+    { timestamp: '2026-11-10T16:50:00Z', equity: 10000 },
+    { timestamp: '2026-11-10T16:55:00Z', equity: 10010 },
+    { timestamp: '2026-11-10T17:00:00Z', equity: 20010 },
+    { timestamp: '2026-11-10T20:00:00Z', equity: 20210 },
+    { timestamp: '2026-11-11T05:00:00Z', equity: 20210 }
+  ]
+  const flow = { activity_type: 'CSD', notional: 10000, raw: { date: '2026-11-10', created_at: '2026-11-10T16:56:41Z' } }
+  // Include an earlier day to establish the opening base.
+  points.unshift({ timestamp: '2026-11-09T20:00:00Z', equity: 10000 })
+  const result = normalizedPerformance(points, [flow], true)
+  assert.equal(result.reason, '')
+  assert.ok(Math.abs(result.points[3].equity - 100.1) < 1e-8)
+  assert.ok(result.points.every(p => p.equity < 102))
+  assert.equal(result.estimated, true)
+})
+
+test('date-only ambiguous flows do not create invented intraday performance', async () => {
+  const { normalizedPerformance } = await utils
+  const points = [100, 100, 110, 120].map((equity, i) => ({ timestamp: `2026-11-${i ? '10' : '09'}T${i + 15}:00:00Z`, equity }))
+  const flow = { activity_type: 'CSD', notional: 10, raw: { date: '2026-11-10' } }
+  assert.match(normalizedPerformance(points, [flow], true).reason, /affidabilità/)
+  assert.match(normalizedPerformance(points, [{ ...flow, notional: 50 }], true).reason, /affidabilità/)
+})
