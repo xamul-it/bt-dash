@@ -49,8 +49,13 @@
                 map-options
                 use-input
                 @filter="filterStrategies"
-                @update:model-value="loadSchema(true)"
+                @update:model-value="loadSchema('preserve')"
               />
+              <div v-if="(catalog.strategies || []).find(s => s.value === form.strategy)?.research" class="col-12">
+                <q-banner dense rounded class="bg-orange-1 text-orange-10">
+                  Strategia Research: solo backtest. Includi SPY nell'universo ticker e verifica i parametri del profilo originale prima del confronto.
+                </q-banner>
+              </div>
               <q-select
                 class="col-12 col-md-4"
                 outlined
@@ -59,7 +64,7 @@
                 :options="catalog.profiles || []"
                 v-model="preset"
                 @update:model-value="applyPreset"
-                hint="Importa una copia per il backtest"
+                hint="Importa una copia per il backtest; con una variante Research selezionata conserva la variante se il profilo è compatibile"
               />
               <q-input
                 class="col-12"
@@ -153,9 +158,9 @@
             </div>
             <q-expansion-item
               v-if="schema.description"
+              v-model="strategyDescriptionOpen"
               dense
               label="Descrizione della strategia"
-              default-opened
               class="q-mt-md"
             >
               <MarkdownNotes class="q-pa-md" :text="schema.description" />
@@ -270,7 +275,7 @@
                 outlined
                 v-model="form.stratargs"
                 autogrow
-                hint="Es. max_exposure=2 hedge_enabled=False · gli avanzati prevalgono sugli override"
+                hint="Es. max_exposure=2 hedge_enabled=False · gli avanzati prevalgono sugli override e restano invariati al cambio strategia: verifica che siano compatibili"
               />
             </q-expansion-item> </q-card-section
         ></q-card>
@@ -922,7 +927,9 @@ import { constants } from "boot/constants";
 import EquityCurve from "../components/EquityCurve.vue";
 import ParameterHelp from "../components/ParameterHelp.vue";
 import MarkdownNotes from "../components/MarkdownNotes.vue";
-import { strategyDocumentation, parameterSections } from "../utils/strategyDocumentation.mjs";
+import { strategyDocumentation, parameterSections, uniqueParameterGroups } from "../utils/strategyDocumentation.mjs";
+import { strategyForImportedProfile } from "../utils/researchStrategy.mjs";
+import { preserveCommonParameters } from "../utils/strategyParameters.mjs";
 
 const endpoint = "/dyn/simulations";
 const defaults = () => ({
@@ -970,6 +977,7 @@ export default {
       form: defaults(),
       preset: null,
       parameterInputs: {},
+      strategyDescriptionOpen: false,
       parameterSearch: "",
       showAllParameters: false,
       showUnusedParameters: false,
@@ -1168,7 +1176,7 @@ export default {
     visibleParameterGroups() {
       const names = new Set(this.visibleParameters.map(p => p.name));
       const groups = this.schema.parameter_groups?.length ? this.schema.parameter_groups : [{ class_name: this.form.strategy, parameters: this.schema.parameters || [] }];
-      return groups.map(group => {
+      return uniqueParameterGroups(groups, this.schema.parameters).map(group => {
         // Group before filtering so searches and the initial limit keep their section.
         const sections = parameterSections(group).map(section => ({ ...section,
           parameters: section.parameters.filter(p => names.has(p.name)),
@@ -1322,7 +1330,7 @@ export default {
     comparisonNumber(row) {
       return this.comparisonSelection.findIndex(selected => selected.id === row.id) + 1;
     },
-    newRun() { if (this.detailOpen && this.selectedRun) return this.cloneRun(this.selectedRun); this.detailOpen = false; this.form = defaults(); this.parameterInputs = {}; this.validation = null; this.tab = 'new'; this.loadSchema(); },
+    newRun() { if (this.detailOpen && this.selectedRun) return this.cloneRun(this.selectedRun); this.detailOpen = false; this.form = defaults(); this.parameterInputs = {}; this.strategyDescriptionOpen = false; this.validation = null; this.tab = 'new'; this.loadSchema(); },
     displayValue(value) { return value === undefined ? 'Non presente' : typeof value === 'object' ? JSON.stringify(value) : String(value); },
     flattenConfig(value, prefix = '') {
       return Object.fromEntries(Object.entries(value).flatMap(([key, item]) => {
@@ -1466,17 +1474,26 @@ export default {
     },
     async loadSchema(reset) {
       const version = ++this.schemaVersion;
+      const previousSchema = this.schema;
+      const previousInputs = { ...this.parameterInputs };
       this.schemaLoading = true;
-      if (reset) {
+      if (reset === true) {
         this.parameterInputs = {};
         this.validation = null;
         this.form.stratargs = "";
       }
+      if (reset === 'preserve') this.validation = null;
       try {
         const { data } = await api.get(endpoint + "/strategy", {
           params: { name: this.form.strategy },
         });
-        if (version === this.schemaVersion) this.schema = strategyDocumentation(data);
+        if (version === this.schemaVersion) {
+          const nextSchema = strategyDocumentation(data);
+          if (reset === 'preserve') {
+            this.parameterInputs = preserveCommonParameters(previousSchema, nextSchema, previousInputs);
+          }
+          this.schema = nextSchema;
+        }
       } catch (e) {
         if (version === this.schemaVersion) this.error = this.message(e);
       } finally {
@@ -1523,12 +1540,14 @@ export default {
     },
     async applyPreset() {
       try {
+        const selectedStrategy = this.form.strategy;
         const { data } = await api.get(
           endpoint + "/preset/" + encodeURIComponent(this.preset),
         );
         this.form = {
           ...defaults(),
           ...data,
+          strategy: strategyForImportedProfile(selectedStrategy, data.strategy),
           broker: { ...defaults().broker, ...data.broker },
         };
         await this.loadSchema(true);
@@ -1724,6 +1743,7 @@ export default {
     async cloneRun(row) {
       const config = row.request_snapshot?.configuration;
       if (!config?.strategy) return;
+      this.strategyDescriptionOpen = false;
       this.form = {
         ...defaults(),
         ...config,

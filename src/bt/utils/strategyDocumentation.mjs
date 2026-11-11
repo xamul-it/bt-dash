@@ -11,7 +11,7 @@ export function parameterSections(group) {
       if (!header) break
       let end = i + 1
       while (end < lines.length && (!lines[end].trim() || lines[end].search(/\S/) > header[1].length)) end++
-      definitions.push({ prefix: header[2] + '_', title: header[2],
+      definitions.push({ prefix: header[2] + '_', title: header[2] === 'spy_drawdown_filter' ? 'Filtro drawdown SPY' : header[2],
         description: lines.slice(i + 1, end).map(line => line.trim()).join('\n').trim() })
       i = end
     }
@@ -26,6 +26,27 @@ export function parameterSections(group) {
       label: definition ? parameter.name.slice(definition.prefix.length) : parameter.name })
   }
   return [...sections.values()]
+}
+
+// Prefer actual declarations over documentation-only mentions; among actual
+// overrides, the closest declaration in the MRO owns the displayed parameter.
+export function uniqueParameterGroups(groups, parameters) {
+  const seen = new Set()
+  const effective = new Map((parameters || []).map(parameter => [parameter.name, parameter]))
+  const declared = new Set((groups || []).flatMap(group =>
+    (group.parameters || []).filter(parameter => parameter.declared === true).map(parameter => parameter.name)))
+  return (groups || []).map(group => ({
+    ...group,
+    parameters: (group.parameters || []).filter(parameter => {
+      if (declared.has(parameter.name) && parameter.declared !== true) return false
+      if (seen.has(parameter.name)) return false
+      seen.add(parameter.name)
+      return true
+    }).map(parameter => ({
+      ...parameter,
+      default: effective.has(parameter.name) ? effective.get(parameter.name).default : parameter.default,
+    })),
+  }))
 }
 
 // Extract NumPy-style parameter entries without changing the source docstring.

@@ -1,0 +1,82 @@
+// Real authenticated local API + shared corpus. No production restart or external LLM.
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright')
+
+;(async () => {
+  const base = process.env.KNOWLEDGE_PREVIEW_URL || 'http://127.0.0.1:19691'
+  const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) })
+  try {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' })
+    const page = await context.newPage()
+    const errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    const unauthenticated = await context.request.get(base + '/api/dyn/knowledge/status')
+    assert.equal(unauthenticated.status(), 401)
+    await page.goto(base + '/dash/#/Knowledge')
+    await page.getByLabel('Password').fill('knowledge-preview')
+    await page.getByRole('button', { name: 'Entra', exact: true }).click()
+    await page.getByRole('heading', { name: 'Documentazione e studi' }).waitFor()
+    await page.getByText(/\d+ documenti/).waitFor()
+    await page.getByLabel('Cerca nella documentazione').fill('post_up_cooldown_days')
+    await page.getByLabel('Modalità di ricerca').click()
+    await page.getByRole('option', { name: 'Parole chiave', exact: true }).click()
+    const keywordResponse = page.waitForResponse(response => response.url().endsWith('/knowledge/search'))
+    await page.getByRole('button', { name: 'Cerca', exact: true }).click()
+    const keyword = await (await keywordResponse).json()
+    assert.equal(keyword.mode, 'keyword')
+    assert.ok(keyword.hits.length > 0)
+    await page.locator('.source-excerpt').first().waitFor()
+    await page.locator('.result-title').first().click()
+    await page.locator('.source-dialog .line-number').first().waitFor()
+    const expected = keyword.hits[0]
+    assert.ok((await page.locator('.source-dialog').innerText()).includes(expected.path))
+    const firstLine = await page.locator('.source-dialog .line-number').first().innerText()
+    assert.equal(Number(firstLine), expected.context.start_line)
+    await page.getByRole('button', { name: 'Chiudi fonte', exact: true }).click()
+    for (const [label, mode] of [['Semantica', 'semantic'], ['Ibrida: parole e significato', 'hybrid']]) {
+      await page.getByLabel('Modalità di ricerca').click()
+      await page.getByRole('option', { name: label, exact: true }).click()
+      const pending = page.waitForResponse(response => response.url().endsWith('/knowledge/search'))
+      await page.getByRole('button', { name: 'Cerca', exact: true }).click()
+      const response = await pending
+      assert.equal(response.status(), 200)
+      const body = await response.json()
+      assert.equal(body.mode, mode)
+      assert.ok(body.hits.length > 0)
+    }
+    await page.getByRole('tab', { name: 'Studi', exact: true }).click()
+    await page.getByLabel('Filtra gli studi').fill('RMA/study_20261020')
+    await page.getByText('bt-strategy-test/RMA/study_20261020', { exact: true }).click()
+    await page.locator('.study-dialog').getByText('RMAStrategy: assessment e sperimentazione controllata', { exact: true }).click()
+    await page.locator('.source-dialog .line-number').first().waitFor()
+    assert.match(await page.locator('.source-dialog').innerText(), /NEGATIVE_RESULT/)
+    await page.getByRole('button', { name: 'Chiudi fonte', exact: true }).click()
+    await page.locator('.study-dialog').getByText('P2/P3 finite design', { exact: true }).click()
+    await page.locator('.source-dialog .line-number').first().waitFor()
+    const nextLines = page.waitForResponse(response => response.url().includes('/knowledge/source?') && response.url().includes('start_line=101'))
+    await page.getByRole('button', { name: 'Righe successive', exact: true }).click()
+    assert.equal((await nextLines).status(), 200)
+    await page.getByText('Righe 101', { exact: false }).waitFor()
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.waitForTimeout(350) // Finish Quasar's dialog/viewport transition before the artifact.
+    await page.screenshot({ path: '/tmp/bt-knowledge-mobile.png', fullPage: true })
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false)
+    await page.getByRole('button', { name: 'Chiudi fonte', exact: true }).click()
+    await page.getByRole('button', { name: 'Chiudi studio', exact: true }).click()
+    await page.getByRole('tab', { name: 'Esplora documenti', exact: true }).click()
+    await page.getByLabel('Filtra titolo o percorso').fill('dev-prod-dashboard-api')
+    await page.getByText('docs/dev-prod-dashboard-api.md', { exact: true }).waitFor()
+    await page.getByText('docs/dev-prod-dashboard-api.md', { exact: true }).click()
+    await page.locator('.source-dialog .line-number').first().waitFor()
+    await page.waitForTimeout(350)
+    await page.screenshot({ path: '/tmp/bt-knowledge-source.png', fullPage: true })
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false)
+    assert.deepEqual(errors, [])
+    const result = { authenticated_api: true, modes: ['keyword', 'semantic', 'hybrid'], source_lines: true,
+      study_navigation: true, source_paging: true, catalog: true, mobile_no_horizontal_overflow: true,
+      external_model_calls: 0, javascript_errors: errors }
+    fs.writeFileSync('/tmp/bt-knowledge-browser-result.json', JSON.stringify(result, null, 2))
+    console.log(JSON.stringify(result))
+  } finally { await browser.close() }
+})().catch(error => { console.error(error); process.exitCode = 1 })

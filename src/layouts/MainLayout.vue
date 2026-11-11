@@ -46,6 +46,7 @@
     <!-- show-if-above -->
       <q-list>
         <q-item to="/" exact active-class="navigation-active"><q-item-section avatar><q-icon name="dashboard" /></q-item-section><q-item-section>Dashboard</q-item-section></q-item>
+        <q-item to="/Knowledge" active-class="navigation-active"><q-item-section avatar><q-icon name="menu_book" /></q-item-section><q-item-section>Documentazione e studi</q-item-section></q-item>
         <q-expansion-item icon="science" label="Laboratorio" :default-opened="$route.path === '/ExecuteStrategy' || $route.path === '/Laboratory/Schedules' || $route.path === '/Benchmark'" expand-separator>
           <q-item to="/ExecuteStrategy" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Backtest e confronti</q-item-label></q-item-section></q-item>
           <q-item to="/Laboratory/Schedules" active-class="navigation-active" class="q-pl-xl"><q-item-section><q-item-label>Backtest schedulati</q-item-label></q-item-section></q-item>

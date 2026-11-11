@@ -102,3 +102,13 @@ test('longest explicit prefix wins and groups without docs have no help', async 
   assert.equal(sections[2].description, '')
   assert.equal(parameterSections({ parameters: [{ name: 'a_b' }] })[0].parameters[0].label, 'a_b')
 })
+
+test('groups the SPY drawdown filter under a readable title', async () => {
+  const { parameterSections } = await helper
+  const sections = parameterSections({
+    description: 'Parameter Groups\n----------------\nspy_drawdown_filter\n    Controllo SPY.\n',
+    parameters: [{ name: 'spy_drawdown_filter_threshold' }, { name: 'spy_drawdown_filter_update' }],
+  })
+  assert.equal(sections[0].title, 'Filtro drawdown SPY')
+  assert.deepEqual(sections[0].parameters.map(p => p.label), ['threshold', 'update'])
+})
