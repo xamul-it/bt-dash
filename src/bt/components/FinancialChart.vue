@@ -63,6 +63,7 @@ function fieldName(row, names) {
 }
 
 function finite(value) {
+  if (value == null || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -99,6 +100,7 @@ export default {
     height: { type: Number, default: 340 },
     ariaLabel: { type: String, default: "Grafico finanziario interattivo" },
   },
+  emits: ["load-older"],
   data() {
     return {
       chart: null,
@@ -224,6 +226,7 @@ export default {
     },
     renderChart() {
       if (!this.$refs.container) return;
+      const visibleRange = this.chart?.timeScale().getVisibleRange();
       this.destroyChart();
       if (!this.hasData || this.$refs.container.clientWidth <= 0) return;
 
@@ -257,7 +260,13 @@ export default {
       if (this.mode === "market") this.renderMarketChart();
       else this.renderEquityChart();
 
-      this.chart.timeScale().fitContent();
+      if (visibleRange) this.chart.timeScale().setVisibleRange(visibleRange);
+      else this.chart.timeScale().fitContent();
+      if (this.mode === "market") {
+        this.chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+          if (range && range.from < 30) this.$emit("load-older");
+        });
+      }
       window.requestAnimationFrame(() => this.resize());
     },
     renderMarketChart() {

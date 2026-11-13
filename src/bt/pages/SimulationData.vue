@@ -134,18 +134,29 @@
           ><div>{{ selectedSymbol }} · {{ selectedSource }}</div>
           <q-space /><q-btn flat dense icon="close" v-close-popup /></q-bar
         ><q-card-section
-          ><financial-chart
+          ><div v-if="barsYahoo" class="row items-center q-gutter-sm q-mb-sm">
+            <q-btn-toggle v-model="priceMode" toggle-color="primary" :options="[{label: 'Normale', value: 'normal'}, {label: 'Raw', value: 'raw', disable: !hasRaw}, {label: 'Adj', value: 'adjusted', disable: !hasAdjusted}]" />
+          </div>
+          <div v-if="barsYahoo" class="text-caption text-grey-8 q-mb-sm">{{ priceDescription }}</div>
+          <div class="text-caption text-grey-8 q-mb-sm">
+            <strong>Legenda:</strong> O apertura · H massimo · L minimo · C chiusura · Vol volume.
+            Candele e barre volume verdi: chiusura almeno pari all’apertura; rosse: chiusura inferiore.
+            <span v-if="barsYahoo"><span style="color: #7c3aed">● D</span>: variazione del fattore Adj/Raw desunta dai prezzi; la causa e l’importo dell’evento non sono disponibili.</span>
+          </div>
+          <financial-chart
             v-if="barsDialog && bars.length"
             ref="barsChart"
             mode="market"
-            :bars="bars"
+            :bars="chartBars"
+            :markers="adjustmentMarkers"
+            @load-older="loadOlderBars"
             :timeframe="barsTimeframe"
             :height="460"
             :aria-label="`Grafico candlestick interattivo di ${selectedSymbol}`"
           />
           <div class="text-caption q-mb-md">
-            Prezzo OHLC e volumi · ultime {{ bars.length }} barre · trascina per
-            esplorare, usa la rotella per lo zoom
+            Prezzo OHLC e volumi · {{ bars.length }} barre caricate · trascina o riduci lo zoom per caricare lo storico precedente
+            <span v-if="barsLoading"> · Caricamento…</span><span v-else-if="!barsHasMore"> · Inizio storico raggiunto</span>
           </div>
           <q-table
             flat
@@ -228,6 +239,10 @@ export default {
           format: (v) => this.formatBarDate(v, this.loadedTimeframe),
           align: "left",
         },
+      barsParams: null,
+      barsLoading: false,
+      barsHasMore: true,
+      priceMode: "adjusted",
         {
           name: "last_bar",
           label: "Ultima barra",
@@ -259,7 +274,7 @@ export default {
           field: k,
           align: "left",
           sortable: true,
-          format: (v) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()) ? this.formatBarDate(v, this.barsTimeframe) : v,
+          format: (v) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()) ? this.formatBarDate(v, this.barsTimeframe) : (typeof v === "number" ? new Intl.NumberFormat("it-IT", { maximumFractionDigits: /volume/i.test(k) ? 0 : 4 }).format(v) : v ?? "—"),
         }));
     },
   },
@@ -282,9 +297,59 @@ export default {
   beforeUnmount() {
     window.clearInterval(this.timer);
   },
+    barsYahoo() { return ["yahoo", "yahoo_adj"].includes(this.barsParams?.provider); },
+    hasRaw() { return this.barsParams?.provider === "yahoo" || this.bars.some((row) => row["Raw Close"] != null); },
+    hasAdjusted() { return this.bars.some((row) => row["Adj Close"] != null) || this.barsParams?.provider === "yahoo_adj"; },
+    priceDescription() {
+      if (this.priceMode === "normal") return this.barsParams?.provider === "yahoo_adj"
+        ? "Normale: colonne OHLC standard del file yahoo_adj, già aggiustate. Il volume è quello fornito da Yahoo."
+        : "Normale: colonne OHLC standard del file Yahoo, senza l’aggiustamento Adj. Coincidono con Raw; possono già riflettere gli split applicati dal provider.";
+      if (this.priceMode === "raw") return "Raw: OHLC originali scaricati da Yahoo prima dell’aggiustamento Adj; non sono necessariamente prezzi storici senza correzioni per split. Il volume è quello fornito da Yahoo.";
+      return "Adj: OHLC aggiustati con il rapporto Adj Close / Close di Yahoo, che riflette gli aggiustamenti del provider, inclusi dividendi e altre operazioni societarie. Apertura, massimo e minimo sono calcolati con lo stesso fattore; il volume resta quello fornito da Yahoo.";
+    },
+    chartBars() {
+      if (!this.barsYahoo || this.priceMode === "normal") return this.bars;
+      return this.bars.map((row) => {
+        const result = { ...row };
+        const close = Number(row["Raw Close"] ?? row.Close);
+        const adjusted = Number(row["Adj Close"]);
+        const factor = close && Number.isFinite(adjusted) ? adjusted / close : null;
+        for (const key of ["Open", "High", "Low", "Close"]) {
+          const raw = row[`Raw ${key}`] ?? (this.barsParams.provider === "yahoo" ? row[key] : null);
+          const adj = row[`Adj ${key}`] ?? (this.barsParams.provider === "yahoo_adj" ? row[key] : (raw != null && factor != null ? Number(raw) * factor : null));
+          result[key] = this.priceMode === "raw" ? raw : adj;
+        }
+        return result;
+      });
+    },
+    adjustmentMarkers() {
+      if (!this.barsYahoo) return [];
+      const markers = [];
+      let previous = null;
+      for (const row of this.bars) {
+        const raw = Number(row["Raw Close"] ?? row.Close);
+        const adj = Number(row["Adj Close"]);
+        const factor = raw && Number.isFinite(adj) ? adj / raw : null;
+        if (factor != null && previous != null && Math.abs(factor / previous - 1) > 0.0001) {
+          const dateKey = Object.keys(row).find((k) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()));
+          if (dateKey) markers.push({ time: row[dateKey], position: "aboveBar", color: "#7c3aed", shape: "circle", text: "D" });
+        }
+        previous = factor;
+      }
+      return markers;
+    },
   methods: {
     formatBarDate(value, timeframe) {
       if (value == null || value === "") return "—";
+        .sort((a, b) => {
+          const rank = (key) => {
+            const name = key.toLowerCase();
+            if (["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(name)) return 0;
+            if (name === "adj factor") return 1;
+            return name.includes("volume") ? 3 : 2;
+          };
+          return rank(a) - rank(b);
+        })
       const text = String(value);
       return timeframe === "daily" ? text.slice(0, 10) : text.replace("T", " ");
     },
@@ -374,6 +439,9 @@ export default {
       }
     },
     async openLog() {
+        this.barsParams = params;
+        this.barsHasMore = data.length === 500;
+        this.priceMode = "normal";
       if (!this.refreshJob) return;
       try {
         this.log = (
@@ -382,6 +450,22 @@ export default {
         this.logDialog = true;
       } catch (e) {
         this.error = this.message(e);
+    async loadOlderBars() {
+      if (this.barsLoading || !this.barsHasMore || !this.bars.length || !this.barsDialog) return;
+      const first = this.bars[0];
+      const dateKey = Object.keys(first).find((k) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()));
+      if (!dateKey) { this.barsHasMore = false; return; }
+      this.barsLoading = true;
+      const symbol = this.selectedSymbol;
+      const params = this.barsParams;
+      try {
+        const { data } = await api.get(`/dyn/simulations/data/${encodeURIComponent(symbol)}/bars`, { params: { ...params, limit: 500, before: first[dateKey] } });
+        if (this.selectedSymbol !== symbol || this.barsParams !== params || !this.barsDialog) return;
+        this.barsHasMore = data.length === 500;
+        this.bars = [...data.map((row, i) => ({ ...row, _index: -this.bars.length - i })), ...this.bars];
+      } catch (e) { this.error = this.message(e); this.barsHasMore = false; }
+      finally { this.barsLoading = false; }
+    },
       }
     },
   },
