@@ -2,16 +2,16 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const utils = import('../src/bt/utils/portfolioDashboard.mjs')
 
-test('open P&L uses broker value or derives long and short gains from cost', async () => {
+test('open P&L uses timestamped SIP trades and does not trust stale broker valuations', async () => {
   const { positionPnl, portfolioOpenPnl } = await utils
-  const long = { side: 'long', qty: '10', avg_entry_price: '90', current_price: '100' }
-  const short = { side: 'short', qty: '-2', avg_entry_price: '100', current_price: '90' }
-  assert.equal(positionPnl({ ...long, unrealized_pl: '75' }), 75)
+  const long = { side: 'long', qty: '10', avg_entry_price: '90', market_trade_price: '100', market_trade_at: '2026-11-14T00:59:00Z', unrealized_pl: '0' }
+  const short = { side: 'short', qty: '-2', avg_entry_price: '100', market_trade_price: '90', market_trade_at: '2026-11-14T00:59:00Z' }
   assert.equal(positionPnl(long), 100)
   assert.equal(positionPnl(short), 20)
   assert.equal(portfolioOpenPnl([long, short]), 120)
   assert.equal(portfolioOpenPnl([]), 0)
-  assert.equal(portfolioOpenPnl([long, { ...short, current_price: null }]), null)
+  assert.equal(portfolioOpenPnl([long, { ...short, market_trade_price: null }]), null)
+  assert.equal(positionPnl({ ...long, market_trade_at: null }), null)
   assert.equal(positionPnl({ ...long, side: null }), null)
 })
 

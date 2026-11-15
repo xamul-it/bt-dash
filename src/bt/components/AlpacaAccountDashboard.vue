@@ -85,7 +85,7 @@
         <q-card-section>
           <q-input v-if="tab !== 'analysis'" v-model="search" label="Cerca simbolo, stato o ID" dense outlined clearable class="q-mb-md" />
           <template v-if="tab === 'positions'">
-            <div class="text-caption text-grey-7 q-mb-sm">Fotografia attuale del conto, indipendente dal periodo selezionato. Lo storico delle posizioni richiede la ricostruzione da eseguiti e movimenti.</div>
+            <div class="text-caption text-grey-7 q-mb-sm">P&L stimato sul prezzo dell'ultimo trade SIP rispetto al prezzo medio di carico, senza commissioni; l'orario del trade può essere precedente e diverso per ciascun titolo. Equity e valore broker restano quelli comunicati da Alpaca. Se manca un prezzo, il P&L totale non è disponibile.</div>
             <q-table :rows="positions" :columns="positionColumns" row-key="symbol" :filter="search" flat :loading="loading" :pagination="{ rowsPerPage: 15 }" no-data-label="Nessuna posizione disponibile" />
           </template>
           <template v-if="tab === 'orders'">
@@ -210,7 +210,7 @@ export default {
       { label: 'Liquidità', value: money(account.value.cash) },
       { label: 'Buying power', value: money(account.value.buying_power) },
       { label: 'Esposizione lorda', value: money(exposure.value) },
-      { label: 'P&L aperto', value: money(Object.keys(account.value).length ? portfolioOpenPnl(positions.value) : null) },
+      { label: 'P&L aperto stimato · ultimo trade SIP', value: money(Object.keys(account.value).length ? portfolioOpenPnl(positions.value) : null) },
 
       { label: 'Posizioni aperte', value: Object.keys(account.value).length ? positions.value.length : '—' }
     ])
@@ -225,7 +225,7 @@ export default {
     ])
     const numericColumn = (name, label, monetary = false) => ({ name, label, field: row => number(row[name]), align: 'right', sortable: true, format: monetary ? money : value => value ?? '—' })
     const column = (name, label, format) => ({ name, label, field: name, align: 'left', sortable: true, ...(format ? { format } : {}) })
-    const positionColumns = [column('symbol', 'Titolo'), column('side', 'Lato'), numericColumn('qty', 'Quantità'), numericColumn('avg_entry_price', 'Prezzo medio', true), numericColumn('current_price', 'Prezzo attuale', true), numericColumn('market_value', 'Valore', true), { name: 'unrealized_pl', label: 'P&L aperto', field: positionPnl, align: 'right', sortable: true, format: money }]
+    const positionColumns = [column('symbol', 'Titolo'), column('side', 'Lato'), numericColumn('qty', 'Quantità'), numericColumn('avg_entry_price', 'Prezzo medio', true), numericColumn('market_trade_price', 'Ultimo trade SIP', true), column('market_trade_at', 'Ora trade (New York)', dateTime), numericColumn('market_value', 'Valore broker', true), { name: 'unrealized_pl', label: 'P&L aperto stimato', field: positionPnl, align: 'right', sortable: true, format: money }]
     const orderColumns = [column('submitted_at', 'Inviato (New York)', dateTime), column('symbol', 'Titolo'), column('side', 'Lato'), column('type', 'Tipo'), column('status', 'Stato'), numericColumn('qty', 'Quantità'), numericColumn('filled_qty', 'Eseguita'), numericColumn('filled_avg_price', 'Prezzo medio', true), column('id', 'ID ordine')]
     const cycleFillColumns = [numericColumn('cycle', 'Ciclo'), column('action', 'Movimento'), numericColumn('position_after', 'Posizione dopo'), column('timestamp', 'Ora (New York)', dateTime), column('symbol', 'Titolo'), numericColumn('qty', 'Quantità'), numericColumn('price', 'Prezzo', true), column('order_id', 'ID ordine')]
     const fillColumns = [column('timestamp', 'Ora (New York)', dateTime), column('symbol', 'Titolo'), column('side', 'Lato'), numericColumn('qty', 'Quantità'), numericColumn('price', 'Prezzo', true), column('order_id', 'ID ordine')]

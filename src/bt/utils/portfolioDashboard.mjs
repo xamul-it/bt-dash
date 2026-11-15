@@ -1,9 +1,7 @@
 export function positionPnl(position = {}) {
   const numeric = value => value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value)
-  const reported = numeric(position.unrealized_pl)
-  if (reported != null) return reported
-  const qty = numeric(position.qty), entry = numeric(position.avg_entry_price), current = numeric(position.current_price)
-  if (qty == null || entry == null || current == null || !['long', 'short'].includes(position.side)) return null
+  const qty = numeric(position.qty), entry = numeric(position.avg_entry_price), current = numeric(position.market_trade_price)
+  if (qty == null || entry == null || current == null || current <= 0 || !position.market_trade_at || !['long', 'short'].includes(position.side)) return null
   return Math.abs(qty) * (current - entry) * (position.side === 'short' ? -1 : 1)
 }
 
