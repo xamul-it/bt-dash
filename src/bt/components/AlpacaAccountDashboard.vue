@@ -133,7 +133,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { api } from 'boot/axios'
 import PortfolioEquityChart from './PortfolioEquityChart.vue'
-import { normalizedPerformance, periodIndicators, periodBounds, historyWindows, archivedHistoryWindows, defaultPortfolioContext, loadHistoryWindows, horizonDays, validTimeframes, validPeriods, TIMEFRAME_LIMITS, symbolLegend, positionCycles, openingPositions } from '../utils/portfolioDashboard.mjs'
+import { positionPnl, portfolioOpenPnl, normalizedPerformance, periodIndicators, periodBounds, historyWindows, archivedHistoryWindows, defaultPortfolioContext, loadHistoryWindows, horizonDays, validTimeframes, validPeriods, TIMEFRAME_LIMITS, symbolLegend, positionCycles, openingPositions } from '../utils/portfolioDashboard.mjs'
 
 export default {
   components: { PortfolioEquityChart },
@@ -209,7 +209,7 @@ export default {
       { label: 'Liquidità', value: money(account.value.cash) },
       { label: 'Buying power', value: money(account.value.buying_power) },
       { label: 'Esposizione lorda', value: money(exposure.value) },
-      { label: 'P&L aperto', value: money(Object.keys(account.value).length ? positions.value.reduce((sum, row) => sum + (Number(row.unrealized_pl) || 0), 0) : null) },
+      { label: 'P&L aperto', value: money(Object.keys(account.value).length ? portfolioOpenPnl(positions.value) : null) },
 
       { label: 'Posizioni aperte', value: Object.keys(account.value).length ? positions.value.length : '—' }
     ])
@@ -224,7 +224,7 @@ export default {
     ])
     const numericColumn = (name, label, monetary = false) => ({ name, label, field: row => number(row[name]), align: 'right', sortable: true, format: monetary ? money : value => value ?? '—' })
     const column = (name, label, format) => ({ name, label, field: name, align: 'left', sortable: true, ...(format ? { format } : {}) })
-    const positionColumns = [column('symbol', 'Titolo'), column('side', 'Lato'), numericColumn('qty', 'Quantità'), numericColumn('avg_entry_price', 'Prezzo medio', true), numericColumn('current_price', 'Prezzo attuale', true), numericColumn('market_value', 'Valore', true), numericColumn('unrealized_pl', 'P&L aperto', true)]
+    const positionColumns = [column('symbol', 'Titolo'), column('side', 'Lato'), numericColumn('qty', 'Quantità'), numericColumn('avg_entry_price', 'Prezzo medio', true), numericColumn('current_price', 'Prezzo attuale', true), numericColumn('market_value', 'Valore', true), { name: 'unrealized_pl', label: 'P&L aperto', field: positionPnl, align: 'right', sortable: true, format: money }]
     const orderColumns = [column('submitted_at', 'Inviato (New York)', dateTime), column('symbol', 'Titolo'), column('side', 'Lato'), column('type', 'Tipo'), column('status', 'Stato'), numericColumn('qty', 'Quantità'), numericColumn('filled_qty', 'Eseguita'), numericColumn('filled_avg_price', 'Prezzo medio', true), column('id', 'ID ordine')]
     const cycleFillColumns = [numericColumn('cycle', 'Ciclo'), column('action', 'Movimento'), numericColumn('position_after', 'Posizione dopo'), column('timestamp', 'Ora (New York)', dateTime), column('symbol', 'Titolo'), numericColumn('qty', 'Quantità'), numericColumn('price', 'Prezzo', true), column('order_id', 'ID ordine')]
     const fillColumns = [column('timestamp', 'Ora (New York)', dateTime), column('symbol', 'Titolo'), column('side', 'Lato'), numericColumn('qty', 'Quantità'), numericColumn('price', 'Prezzo', true), column('order_id', 'ID ordine')]

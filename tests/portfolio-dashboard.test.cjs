@@ -2,6 +2,19 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const utils = import('../src/bt/utils/portfolioDashboard.mjs')
 
+test('open P&L uses broker value or derives long and short gains from cost', async () => {
+  const { positionPnl, portfolioOpenPnl } = await utils
+  const long = { side: 'long', qty: '10', avg_entry_price: '90', current_price: '100' }
+  const short = { side: 'short', qty: '-2', avg_entry_price: '100', current_price: '90' }
+  assert.equal(positionPnl({ ...long, unrealized_pl: '75' }), 75)
+  assert.equal(positionPnl(long), 100)
+  assert.equal(positionPnl(short), 20)
+  assert.equal(portfolioOpenPnl([long, short]), 120)
+  assert.equal(portfolioOpenPnl([]), 0)
+  assert.equal(portfolioOpenPnl([long, { ...short, current_price: null }]), null)
+  assert.equal(positionPnl({ ...long, side: null }), null)
+})
+
 test('equity skips missing values, sorts and deduplicates actual samples', async () => {
   const { historySeries } = await utils
   const rows = historySeries([
