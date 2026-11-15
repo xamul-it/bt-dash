@@ -7,16 +7,24 @@
     <q-select v-model="selectedRun" :options="runOptions" label="Run backtest da confrontare (facoltativo)" outlined dense clearable emit-value map-options class="q-mb-sm" :loading="runLoading" @focus="loadRuns" @popup-show="loadRuns" @update:model-value="loadTrades"><template #no-option><q-item><q-item-section>{{ runLoading ? 'Caricamento run…' : 'Nessun run preferito completato disponibile' }}</q-item-section></q-item></template></q-select>
     <div v-if="runNote" class="text-caption text-warning q-mb-sm">{{ runNote }}</div>
     <div v-if="simulation.missing" class="text-caption text-warning q-mb-sm">{{ simulation.missing }} eventi nel run simulato senza prezzo o orario con fuso esplicito: non posizionati sui tick.</div>
+    <div class="row items-center q-gutter-xs q-mb-sm" aria-label="Navigazione temporale">
+      <q-btn outline dense icon="chevron_left" aria-label="Periodo precedente" @click="navigate('previous')" />
+      <q-btn outline dense icon="remove" aria-label="Riduci zoom" @click="navigate('out')" />
+      <q-btn outline dense icon="add" aria-label="Aumenta zoom" @click="navigate('in')" />
+      <q-btn outline dense icon="chevron_right" aria-label="Periodo successivo" @click="navigate('next')" />
+      <q-btn flat dense label="Tutto il periodo" @click="reset" />
+    </div>
+    <div class="text-caption text-grey-7 q-mb-sm">Punto viola: eseguito Alpaca · Punto verde: trade del backtest selezionato · PMC: posizione attuale</div>
     <OpenPositionChart :symbol="symbol" historical :start="start" :end="end">
       <template #default="{ positions, fills, fillsNote }">
         <div v-if="mode !== 'ticks'" class="q-mb-md">
           <div class="text-subtitle2">Barre native registrate · 1 minuto</div>
           <div class="text-caption">Seleziona una candela per esaminare i tick di quel minuto. Nessuna barra viene ricostruita dal campione di tick.</div>
-          <MarketEventViewer mode="bars" :rows="bars" :positions="positions" :executions="[...fills, ...simulation.markers]" :start="start" :end="end" :visible-range="range" :cursor="cursor" :height="mode === 'compare' ? 280 : 440" empty-label="Nessuna barra registrata nel periodo." @range-change="changeRange" @reset-range="reset" @cursor-change="cursor = $event" @select-minute="selectMinute" />
+          <MarketEventViewer mode="bars" :rows="bars" :timeline="timeline" :positions="positions" :executions="[...fills, ...simulation.markers]" :start="start" :end="end" :visible-range="range" :cursor="cursor" :height="mode === 'compare' ? 280 : 440" empty-label="Nessuna barra registrata nel periodo." @range-change="changeRange" @reset-range="reset" @cursor-change="cursor = $event" @select-minute="selectMinute" />
         </div>
         <div v-if="mode !== 'bars'">
           <div class="text-subtitle2">Tick · bid, ask e scambi</div>
-          <MarketEventViewer mode="ticks" :rows="ticks" :positions="mode === 'ticks' ? positions : []" :executions="[...fills, ...simulation.markers]" :start="start" :end="end" :visible-range="range" :cursor="cursor" :height="mode === 'compare' ? 280 : 440" empty-label="Nessun tick registrato nel periodo." @range-change="changeRange" @reset-range="reset" @cursor-change="cursor = $event" />
+          <MarketEventViewer mode="ticks" :rows="ticks" :timeline="timeline" :positions="mode === 'ticks' ? positions : []" :executions="[...fills, ...simulation.markers]" :start="start" :end="end" :visible-range="range" :cursor="cursor" :height="mode === 'compare' ? 280 : 440" empty-label="Nessun tick registrato nel periodo." @range-change="changeRange" @reset-range="reset" @cursor-change="cursor = $event" />
         </div>
         <div v-if="fillsNote" class="text-warning q-mt-sm">{{ fillsNote }}</div>
         <q-expansion-item label="Eseguiti e simulazioni nel periodo" dense class="q-mt-sm">
@@ -39,9 +47,12 @@ export default {
   emits: ['range-change', 'reset-range'],
   setup (props, { emit }) {
     const mode = ref('compare'), range = ref(null), cursor = ref(null)
+    const timeline = ref([])
     let resetPending = false
-    watch(() => props.selectionKey, () => { resetPending = true })
+    watch(() => props.selectionKey, () => { resetPending = true; timeline.value = [] })
     watch(() => [props.bars, props.ticks], () => {
+      const times = [...timeline.value, ...props.bars.map(row => row.time), ...props.ticks.map(row => row.time)]
+      timeline.value = [...new Set(times.filter(Number.isFinite))].sort((a, b) => a - b)
       if (resetPending && props.start != null && props.end != null) {
         range.value = { from: props.start, to: props.end > props.start ? props.end : props.start + 60 }
         resetPending = false
@@ -85,6 +96,16 @@ export default {
       range.value = value; emit('range-change', value)
     }
     function reset () { range.value = { from: props.start, to: props.end > props.start ? props.end : props.start + 60 }; emit('reset-range') }
+    function navigate (action) {
+      if (!(props.end > props.start)) return
+      const current = range.value || { from: props.start, to: props.end }
+      const width = current.to - current.from
+      const full = props.end - props.start
+      const nextWidth = Math.min(full, Math.max(Math.min(60, full), width * (action === 'in' ? 0.5 : action === 'out' ? 2 : 1)))
+      const center = (current.from + current.to) / 2 + (action === 'previous' ? -width * 0.5 : action === 'next' ? width * 0.5 : 0)
+      const from = Math.max(props.start, Math.min(props.end - nextWidth, center - nextWidth / 2))
+      changeRange({ from, to: from + nextWidth })
+    }
     function selectMinute (value) { mode.value = 'compare'; changeRange(value) }
     const fillColumns = [
       { name: 'time', label: 'Ora eseguito · Roma', field: 'timestamp', format: value => new Date(value).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) },
@@ -92,7 +113,7 @@ export default {
       { name: 'side', label: 'Operazione', field: 'side', format: value => value === 'buy' ? 'Acquisto' : 'Vendita' },
       { name: 'qty', label: 'Quantità', field: 'qty' }, { name: 'price', label: 'Prezzo eseguito', field: 'price' },
     ]
-    return { selectedRun, runOptions, runLoading, runNote, simulation, loadRuns, loadTrades, mode, range, cursor, externalUrl, changeRange, reset, selectMinute, fillColumns }
+    return { selectedRun, runOptions, runLoading, runNote, simulation, loadRuns, loadTrades, mode, range, timeline, cursor, externalUrl, changeRange, reset, navigate, selectMinute, fillColumns }
   },
 }
 </script>

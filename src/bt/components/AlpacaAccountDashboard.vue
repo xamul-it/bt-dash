@@ -133,6 +133,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { api } from 'boot/axios'
 import PortfolioEquityChart from './PortfolioEquityChart.vue'
+import { standardPortfolioPoints } from '../utils/portfolioSessions.mjs'
 import { positionPnl, portfolioOpenPnl, normalizedPerformance, periodIndicators, periodBounds, historyWindows, archivedHistoryWindows, defaultPortfolioContext, loadHistoryWindows, horizonDays, validTimeframes, validPeriods, TIMEFRAME_LIMITS, symbolLegend, positionCycles, openingPositions } from '../utils/portfolioDashboard.mjs'
 
 export default {
@@ -144,7 +145,7 @@ export default {
     const tradingCalendar = ref({}), calendarWarning = ref('')
     const capitalActivities = ref([]), capitalComplete = ref(false), chartMode = ref('normalized')
     const ordersTruncated = ref(false), fillsTruncated = ref(false), selectedOrder = ref(null)
-    const period = ref('1W'), timeframe = ref('5Min'), session = ref('continuous'), logarithmic = ref(true)
+    const period = ref('1W'), timeframe = ref('5Min'), session = ref('standard'), logarithmic = ref(true)
     const start = ref(''), end = ref(''), tab = ref('positions'), search = ref(''), orderStatus = ref('all')
     let requestVersion = 0, controller
     const context = computed(() => contexts.value.find(row => row.portfolio_key_id === selectedContext.value))
@@ -271,7 +272,7 @@ export default {
         request('portfolio'),
         loadHistoryWindows(tf === '5Min' ? archivedHistoryWindows(bounds.after, bounds.until, now.getTime()) : historyWindows(bounds.after, bounds.until, tf), async window => {
           try {
-            return (await request('portfolio-history', { ...window, timeframe: tf, intraday_reporting: session.value, pnl_reset: 'no_reset', prefer_cache: false })).data
+            return (await request('portfolio-history', { ...window, timeframe: tf, intraday_reporting: session.value === 'standard' ? 'continuous' : session.value, pnl_reset: 'no_reset', prefer_cache: false })).data
           } catch (error) {
             if (tf !== '5Min' || error.code === 'ERR_CANCELED') throw error
             return { timeframe: tf, points: [], cache: { mode: 'local-fallback', remote_error: error.response?.data?.error || error.message } }
@@ -295,7 +296,7 @@ export default {
         if (calendar.missing_months?.length) calendarWarning.value = `Calendario non disponibile per: ${calendar.missing_months.join(', ')}. Sessioni non indicate in questi mesi.`
       } else calendarWarning.value = 'Calendario di trading non disponibile: sessioni non indicate.'
       if (portfolio) { account.value = portfolio.account || {}; positions.value = portfolio.positions || [] }
-      if (history) { points.value = history.points || []; historyCache.value = history.cache || {} }
+      if (history) { points.value = session.value === 'standard' ? standardPortfolioPoints(history.points || [], history.timeframe || tf, calendar || {}) : (history.points || []); historyCache.value = history.cache || {} }
       const merged = new Map((historical?.orders || []).map(row => [row.id, { ...row, _open: !['filled', 'canceled', 'expired', 'rejected', 'replaced', 'stopped'].includes(row.status) }]))
       for (const row of open?.orders || []) merged.set(row.id, { ...row, _open: true })
       orders.value = [...merged.values()]
@@ -335,7 +336,7 @@ export default {
       if (selectedContext.value && validRange.value) filterTimer = setTimeout(loadAll, 250)
     })
     onBeforeUnmount(() => clearTimeout(filterTimer))
-    const sessionOptions = [{ label: 'Regolare', value: 'market_hours' }, { label: 'Premarket + after-hours', value: 'extended_hours' }, { label: 'Continua', value: 'continuous' }]
+    const sessionOptions = [{ label: 'Standard · include overnight', value: 'standard' }, { label: 'Regolare', value: 'market_hours' }, { label: 'Premarket + after-hours', value: 'extended_hours' }, { label: 'Continua · include chiusure', value: 'continuous' }]
     const orderStatusOptions = [{ label: 'Tutti', value: 'all' }, { label: 'Aperti', value: 'open' }, { label: 'Chiusi', value: 'closed' }]
     return { contexts, selectedContext, contextsLoading, loading, errors, updatedAt, context, contextOptions, currency, money, dateTime, metrics, periodMetrics, loadedTimeframe, selectedSymbols, symbolOptions, symbolsLegend, selectedFills, orders, openingQuantities, cycleStatus, cycleError, cycleFillColumns, validRange, timeframeGuide, filterMessage, tradingCalendar, calendarWarning,
       performance, chartMode, period, timeframe, session, start, end, periodOptions, timeframeOptions, sessionOptions, logarithmic, points, historyCache, activitiesCache, appliedLabel,

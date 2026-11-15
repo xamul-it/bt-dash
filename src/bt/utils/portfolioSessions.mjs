@@ -8,6 +8,37 @@ const nyDay = time => {
   return `${p.year}-${p.month}-${p.day}`
 }
 
+const nextDay = date => {
+  const day = new Date(`${date}T12:00:00Z`)
+  day.setUTCDate(day.getUTCDate() + 1)
+  return day.toISOString().slice(0, 10)
+}
+
+export function portfolioSession(time, calendar = {}) {
+  const date = nyDay(time)
+  if (!calendar.covered_months?.includes(date.slice(0, 7))) return 'UNKNOWN'
+  const day = calendar.days?.[date]
+  if (day && time >= day.pm && time < day.close) {
+    return time < day.rth ? 'PM' : time < day.ah ? 'RTH' : 'AH'
+  }
+  // Overnight belongs to the following trading day. Its start is always
+  // 20:00 New York, even when the preceding day closed early.
+  if (day && time < day.pm && time >= day.pm - 8 * 3600) return 'OH'
+  const tomorrow = nextDay(date)
+  if (!calendar.covered_months?.includes(tomorrow.slice(0, 7))) return 'UNKNOWN'
+  const next = calendar.days?.[tomorrow]
+  if (next && time >= next.pm - 8 * 3600 && time < next.pm) return 'OH'
+  return 'C'
+}
+
+export function standardPortfolioPoints(points, timeframe, calendar = {}) {
+  if (!/^(\d+)(Min|H)$/i.test(timeframe || '')) return points
+  return points.filter(point => {
+    const time = typeof point.timestamp === 'number' ? point.timestamp : Date.parse(point.timestamp) / 1000
+    return !Number.isFinite(time) || portfolioSession(time, calendar) !== 'C'
+  })
+}
+
 export function sessionBoundaries(series, timeframe, calendar = {}) {
   const match = /^(\d+)(Min|H)$/i.exec(timeframe || '')
   if (!match) return []
@@ -15,47 +46,30 @@ export function sessionBoundaries(series, timeframe, calendar = {}) {
   const result = []
   for (let i = 1; i < series.length; i++) {
     const prev = series[i - 1], next = series[i]
-    const a = nyDay(prev.time), b = nyDay(next.time)
-    const previousDay = calendar.days?.[a]
-    if (a !== b && previousDay && prev.time < previousDay.close && previousDay.close <= next.time && next.time - prev.time <= step * 2 && !(series[i + 1] && series[i + 1].time - next.time > step * 2)) {
-      result.push({ logical: i - 1 + (previousDay.close - prev.time) / (next.time - prev.time), label: 'C' })
-    }
-    const day = calendar.days?.[b]
-    if (!day) continue
-    const limits = [[day.pm, 'PM'], [day.rth, 'RTH'], [day.ah, 'AH'], [day.close, 'C']]
-    if (next.time - prev.time > step * 2 || a !== b) {
-      // The chart compresses missing time: mark an exact session start at its
-      // first sample, without projecting a boundary across the empty interval.
-      const boundary = limits.find(([seconds]) => seconds === next.time)
-      if (boundary && boundary[1] !== 'C') result.push({ logical: i, label: boundary[1] })
+    const current = portfolioSession(next.time, calendar)
+    const previous = portfolioSession(prev.time, calendar)
+    if (current === 'UNKNOWN' || current === previous || next.time <= prev.time) continue
+    if (next.time - prev.time > step * 2) {
+      // Do not invent a boundary across a compressed interval.
+      const day = calendar.days?.[nyDay(next.time)]
+      if (day && [day.pm, day.rth, day.ah, day.pm - 8 * 3600].includes(next.time) && current !== 'C') {
+        result.push({ logical: i, label: current })
+      }
       continue
     }
-    if (next.time <= prev.time) continue
-    for (const [seconds, label] of limits) {
-      if (prev.time < seconds && seconds <= next.time) {
-        // Do not place a closed-session label beside the next day's first bar
-        // when the closed interval has no samples and is compressed away.
-        if (label === 'C' && series[i + 1] && series[i + 1].time - next.time > step * 2) continue
-        result.push({ logical: i - 1 + (seconds - prev.time) / (next.time - prev.time), label })
-      }
-    }
+    if (current === 'C' && series[i + 1] && series[i + 1].time - next.time > step * 2) continue
+    result.push({ logical: i, label: current })
   }
   return result
 }
 
 export function sessionShading(series, timeframe, calendar = {}) {
   if (!/^(\d+)(Min|H)$/i.test(timeframe || '')) return []
-  return series.map(point => {
-    const date = nyDay(point.time)
-    if (!calendar.covered_months?.includes(date.slice(0, 7))) return 'UNKNOWN'
-    const day = calendar.days?.[date]
-    if (!day) return 'C'
-    return point.time < day.pm || point.time >= day.close ? 'C' : point.time < day.rth ? 'PM' : point.time < day.ah ? 'RTH' : 'AH'
-  })
+  return series.map(point => portfolioSession(point.time, calendar))
 }
 
 export function sessionLines(chart, boundaries, labels = false, sessions = []) {
-  const colors = { PM: 'rgba(234, 179, 8, 0.045)', AH: 'rgba(139, 92, 246, 0.045)', ON: 'rgba(100, 116, 139, 0.07)', C: 'rgba(100, 116, 139, 0.07)' }
+  const colors = { PM: 'rgba(234, 179, 8, 0.045)', AH: 'rgba(139, 92, 246, 0.045)', OH: 'rgba(59, 130, 246, 0.06)', C: 'rgba(100, 116, 139, 0.07)' }
   const view = {
     zOrder: () => 'bottom',
     renderer: () => ({

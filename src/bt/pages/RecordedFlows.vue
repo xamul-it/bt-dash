@@ -14,7 +14,7 @@
         <div v-if="index.state === 'INDEXING' || index.state === 'QUEUED'" class="q-mt-md"><q-linear-progress :value="index.progress || 0" :indeterminate="index.state === 'QUEUED'" color="primary" /><div class="text-caption q-mt-xs">{{ index.state === 'QUEUED' ? 'Analisi in attesa…' : `Analisi dello storico completo · ${Math.round((index.progress || 0) * 100)}%` }} · La pagina resta utilizzabile.</div></div>
         <q-banner v-if="index.stale" rounded class="bg-amber-1 q-mt-md">Sono stati registrati nuovi dati dopo l’ultima analisi. <q-btn flat dense label="Aggiorna finestre" @click="analyze(true)" /></q-banner>
         <div v-if="index.error" class="text-negative q-mt-sm">{{ index.error }} <q-btn flat dense label="Riprova analisi" @click="analyze(true)" /></div>
-        <div class="relative-position q-mt-md"><RecordedMarketChart :symbol="symbol" historical :key="symbol" :selection-key="selectedWindows.join(',')" :bars="chart.bars || []" :ticks="chart.rows || []" :start="chart.start" :end="chart.end" :height="460" empty-label="Seleziona una finestra o attendi l’analisi dello storico." @range-change="zoom" @reset-range="loadOverview" /><q-inner-loading :showing="chartLoading"><q-spinner color="primary" size="32px" /></q-inner-loading></div>
+        <div class="relative-position q-mt-md"><q-linear-progress v-if="chartLoading" indeterminate color="primary" /><RecordedMarketChart :symbol="symbol" historical :key="symbol" :selection-key="selectedWindows.join(',')" :bars="chart.bars || []" :ticks="chart.rows || []" :start="chart.start" :end="chart.end" :height="460" empty-label="Seleziona una finestra o attendi l’analisi dello storico." @range-change="zoom" @reset-range="loadOverview" /></div>
         <q-banner v-if="gaps.length" class="bg-amber-1 q-mt-sm">Interruzioni tra le finestre selezionate:
           <div v-for="gap in gaps" :key="gap.from">{{ dateTime(gap.from) }} → {{ dateTime(gap.to) }}</div>
         </q-banner>
@@ -84,10 +84,17 @@ export default {
           api.get(endpoint, { params: { ...params, mode: 'bars' }, timeout: 45000 }),
         ])
         if (request === chartRequest && !disposed) chart.value = { ...ticks.data, bars: bars.data.rows }
-      } catch (e) { if (request === chartRequest) failure(e) } finally { if (request === chartRequest) chartLoading.value = false }
+      } catch (e) { if (request === chartRequest) { lastRange = ''; failure(e) } } finally { if (request === chartRequest) chartLoading.value = false }
     }
     function loadOverview () { lastRange = ''; return fetchChart() }
-    function zoom (range) { const key = `${Math.round(range.from)}:${Math.round(range.to)}`; if (key === lastRange || range.from <= chart.value.start && range.to >= chart.value.end) return; lastRange = key; fetchChart(range) }
+    function zoom (range) {
+      if (range.from <= chart.value.start && range.to >= chart.value.end) { if (lastRange) loadOverview(); return }
+      const padding = (range.to - range.from) * 0.5
+      const requested = { from: Math.max(chart.value.start, range.from - padding), to: Math.min(chart.value.end, range.to + padding) }
+      const key = `${Math.round(requested.from)}:${Math.round(requested.to)}`
+      if (key === lastRange) return
+      lastRange = key; fetchChart(requested)
+    }
     function selectAll () { selectedWindows.value = (index.value.windows || []).map(w => w.id); loadOverview() }
     function deselectAll () { selectedWindows.value = []; loadOverview() }
     function selectAh () { selectedWindows.value = (index.value.windows || []).filter(w => w.session === 'After-hours').map(w => w.id); loadOverview() }

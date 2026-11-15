@@ -59,6 +59,10 @@
             @click="load"
           />
         </div>
+        <div class="col-auto">
+          <q-btn outline color="primary" icon="edit" label="Modifica simboli"
+            :disable="!selectedList" @click="openMembers" />
+        </div>
         <q-input
           class="col-6 col-md-3"
           outlined
@@ -128,6 +132,25 @@
       <span><q-icon name="view_column" /> Parquet</span><span><q-icon name="table_view" /> CSV</span>
       <span><q-icon name="circle" color="positive" /> Disponibile</span><span><q-icon name="circle" color="orange" /> Assente</span><span><q-icon name="circle" color="negative" /> Errore di lettura</span>
     </div>
+    <q-dialog v-model="membersDialog"><q-card style="width: 600px; max-width: 95vw">
+      <q-card-section class="text-h6">Simboli · {{ membersTicker }}</q-card-section>
+      <q-card-section>
+        <div class="text-caption q-mb-md">I simboli disabilitati restano nella lista e sono esclusi dai nuovi utilizzi.</div>
+        <div class="row q-gutter-sm items-start">
+          <q-input class="col" outlined dense label="Aggiungi simbolo" v-model="newSymbol" @keyup.enter="changeMember(newSymbol, 'add')" />
+          <q-btn color="primary" label="Aggiungi" :loading="membersBusy" @click="changeMember(newSymbol, 'add')" />
+        </div>
+        <q-banner v-if="membersError" class="bg-red-1 text-negative q-mt-sm">{{ membersError }}</q-banner>
+        <q-list separator class="q-mt-md" style="max-height: 50vh; overflow: auto">
+          <q-item v-for="symbol in members.active" :key="'active-' + symbol">
+            <q-item-section>{{ symbol }}</q-item-section><q-item-section side><q-btn flat dense color="negative" label="Disabilita" :disable="membersBusy" @click="changeMember(symbol, 'disable')" /></q-item-section>
+          </q-item>
+          <q-item v-for="symbol in members.inactive" :key="'inactive-' + symbol">
+            <q-item-section class="text-grey-7">{{ symbol }} · disabilitato</q-item-section><q-item-section side><q-btn flat dense color="primary" label="Riattiva" :disable="membersBusy" @click="changeMember(symbol, 'enable')" /></q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section><q-card-actions align="right"><q-btn flat label="Chiudi" v-close-popup /></q-card-actions>
+    </q-card></q-dialog>
     <q-dialog v-model="barsDialog" maximized @show="showBarsChart"
       ><q-card
         ><q-bar
@@ -197,6 +220,12 @@ export default {
   data() {
     return {
       lists: [],
+      membersDialog: false,
+      membersTicker: '',
+      members: { active: [], inactive: [] },
+      membersBusy: false,
+      membersError: '',
+      newSymbol: '',
       ticker: "NVDA,AVGO,MU",
       provider: "yahoo_adj",
       timeframe: "daily",
@@ -210,6 +239,10 @@ export default {
       polling: false,
       barsDialog: false,
       bars: [],
+      barsParams: null,
+      barsLoading: false,
+      barsHasMore: true,
+      priceMode: "adjusted",
       selectedSymbol: "",
       selectedSource: "",
       loadedTimeframe: "daily",
@@ -239,10 +272,6 @@ export default {
           format: (v) => this.formatBarDate(v, this.loadedTimeframe),
           align: "left",
         },
-      barsParams: null,
-      barsLoading: false,
-      barsHasMore: true,
-      priceMode: "adjusted",
         {
           name: "last_bar",
           label: "Ultima barra",
@@ -262,41 +291,12 @@ export default {
     };
   },
   computed: {
+    selectedList() {
+      return this.lists.some((list) => list.value === this.ticker);
+    },
     refreshing() {
       return ["queued", "running"].includes(this.refreshJob?.status);
     },
-    barColumns() {
-      return Object.keys(this.bars[0] || {})
-        .filter((k) => k !== "_index")
-        .map((k) => ({
-          name: k,
-          label: k,
-          field: k,
-          align: "left",
-          sortable: true,
-          format: (v) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()) ? this.formatBarDate(v, this.barsTimeframe) : (typeof v === "number" ? new Intl.NumberFormat("it-IT", { maximumFractionDigits: /volume/i.test(k) ? 0 : 4 }).format(v) : v ?? "—"),
-        }));
-    },
-  },
-  async mounted() {
-    try {
-      const query = this.$route.query;
-      if (typeof query.ticker === 'string') this.ticker = query.ticker;
-      if (['yahoo', 'yahoo_adj', 'alpaca'].includes(query.provider)) this.provider = query.provider;
-      if (['sip', 'iex'].includes(query.feed)) this.feed = query.feed;
-      this.lists = (
-        await api.get("/dyn/simulations/catalog")
-      ).data.ticker_lists;
-      await this.load();
-      await this.poll();
-      this.timer = window.setInterval(() => this.poll(), 3000);
-    } catch (e) {
-      this.error = this.message(e);
-    }
-  },
-  beforeUnmount() {
-    window.clearInterval(this.timer);
-  },
     barsYahoo() { return ["yahoo", "yahoo_adj"].includes(this.barsParams?.provider); },
     hasRaw() { return this.barsParams?.provider === "yahoo" || this.bars.some((row) => row["Raw Close"] != null); },
     hasAdjusted() { return this.bars.some((row) => row["Adj Close"] != null) || this.barsParams?.provider === "yahoo_adj"; },
@@ -338,9 +338,9 @@ export default {
       }
       return markers;
     },
-  methods: {
-    formatBarDate(value, timeframe) {
-      if (value == null || value === "") return "—";
+    barColumns() {
+      return Object.keys(this.bars[0] || {})
+        .filter((k) => k !== "_index")
         .sort((a, b) => {
           const rank = (key) => {
             const name = key.toLowerCase();
@@ -350,6 +350,58 @@ export default {
           };
           return rank(a) - rank(b);
         })
+        .map((k) => ({
+          name: k,
+          label: k,
+          field: k,
+          align: "left",
+          sortable: true,
+          format: (v) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()) ? this.formatBarDate(v, this.barsTimeframe) : (typeof v === "number" ? new Intl.NumberFormat("it-IT", { maximumFractionDigits: /volume/i.test(k) ? 0 : 4 }).format(v) : v ?? "—"),
+        }));
+    },
+  },
+  async mounted() {
+    try {
+      const query = this.$route.query;
+      if (typeof query.ticker === 'string') this.ticker = query.ticker;
+      if (['yahoo', 'yahoo_adj', 'alpaca'].includes(query.provider)) this.provider = query.provider;
+      if (['sip', 'iex'].includes(query.feed)) this.feed = query.feed;
+      this.lists = (
+        await api.get("/dyn/simulations/catalog")
+      ).data.ticker_lists;
+      await this.load();
+      await this.poll();
+      this.timer = window.setInterval(() => this.poll(), 3000);
+    } catch (e) {
+      this.error = this.message(e);
+    }
+  },
+  beforeUnmount() {
+    window.clearInterval(this.timer);
+  },
+  methods: {
+    async openMembers() {
+      this.membersTicker = this.ticker;
+      this.membersError = '';
+      this.newSymbol = '';
+      try {
+        this.members = (await api.get(`/dyn/simulations/ticker-lists/${encodeURIComponent(this.membersTicker)}/members`)).data;
+        this.membersDialog = true;
+      } catch (e) { this.error = this.message(e); }
+    },
+    async changeMember(symbol, action) {
+      if (this.membersBusy) return;
+      this.membersBusy = true;
+      this.membersError = '';
+      try {
+        this.members = (await api.post(`/dyn/simulations/ticker-lists/${encodeURIComponent(this.membersTicker)}/members`, { symbol, action })).data;
+        this.newSymbol = '';
+        if (this.ticker === this.membersTicker) await this.load();
+      } catch (e) { this.membersError = this.message(e); }
+      finally { this.membersBusy = false; }
+    },
+    formatBarDate(value, timeframe) {
+      if (value == null || value === "") return "—";
       const text = String(value);
       return timeframe === "daily" ? text.slice(0, 10) : text.replace("T", " ");
     },
@@ -387,6 +439,9 @@ export default {
           { params: { ...params, limit: 500 } },
         );
         this.bars = data.map((r, i) => ({ ...r, _index: i }));
+        this.barsParams = params;
+        this.barsHasMore = data.length === 500;
+        this.priceMode = "normal";
         this.barsTimeframe = params.timeframe;
         this.selectedSymbol = row.symbol;
         this.selectedSource = `${params.provider} / ${params.timeframe}${params.provider === "alpaca" ? " / " + params.feed : ""}`;
@@ -394,6 +449,22 @@ export default {
       } catch (e) {
         this.error = this.message(e);
       }
+    },
+    async loadOlderBars() {
+      if (this.barsLoading || !this.barsHasMore || !this.bars.length || !this.barsDialog) return;
+      const first = this.bars[0];
+      const dateKey = Object.keys(first).find((k) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()));
+      if (!dateKey) { this.barsHasMore = false; return; }
+      this.barsLoading = true;
+      const symbol = this.selectedSymbol;
+      const params = this.barsParams;
+      try {
+        const { data } = await api.get(`/dyn/simulations/data/${encodeURIComponent(symbol)}/bars`, { params: { ...params, limit: 500, before: first[dateKey] } });
+        if (this.selectedSymbol !== symbol || this.barsParams !== params || !this.barsDialog) return;
+        this.barsHasMore = data.length === 500;
+        this.bars = [...data.map((row, i) => ({ ...row, _index: -this.bars.length - i })), ...this.bars];
+      } catch (e) { this.error = this.message(e); this.barsHasMore = false; }
+      finally { this.barsLoading = false; }
     },
     showBarsChart() {
       this.$nextTick(() => {
@@ -439,9 +510,6 @@ export default {
       }
     },
     async openLog() {
-        this.barsParams = params;
-        this.barsHasMore = data.length === 500;
-        this.priceMode = "normal";
       if (!this.refreshJob) return;
       try {
         this.log = (
@@ -450,22 +518,6 @@ export default {
         this.logDialog = true;
       } catch (e) {
         this.error = this.message(e);
-    async loadOlderBars() {
-      if (this.barsLoading || !this.barsHasMore || !this.bars.length || !this.barsDialog) return;
-      const first = this.bars[0];
-      const dateKey = Object.keys(first).find((k) => ["date", "timestamp", "datetime", "index", "__index_level_0__"].includes(k.toLowerCase()));
-      if (!dateKey) { this.barsHasMore = false; return; }
-      this.barsLoading = true;
-      const symbol = this.selectedSymbol;
-      const params = this.barsParams;
-      try {
-        const { data } = await api.get(`/dyn/simulations/data/${encodeURIComponent(symbol)}/bars`, { params: { ...params, limit: 500, before: first[dateKey] } });
-        if (this.selectedSymbol !== symbol || this.barsParams !== params || !this.barsDialog) return;
-        this.barsHasMore = data.length === 500;
-        this.bars = [...data.map((row, i) => ({ ...row, _index: -this.bars.length - i })), ...this.bars];
-      } catch (e) { this.error = this.message(e); this.barsHasMore = false; }
-      finally { this.barsLoading = false; }
-    },
       }
     },
   },

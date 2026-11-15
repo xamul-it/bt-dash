@@ -11,7 +11,7 @@
     </div>
     <div ref="container" class="market-viewer__chart" :style="{ height: fullscreen ? 'calc(100vh - 160px)' : `${height}px` }" role="img" :aria-label="mode === 'bars' ? 'Grafico barre native' : 'Grafico finanziario bid ask e scambi'" />
     <div v-if="!rows.length" class="text-center text-grey-6 q-pa-md">{{ emptyLabel }}</div>
-    <div class="text-caption text-grey-6 q-mt-xs">Trascina per scorrere · rotella o gesto a due dita per ingrandire · prezzi sulla destra</div>
+    <div class="text-caption text-grey-6 q-mt-xs">Trascina per scorrere · rotella o pizzica con due dita per lo zoom</div>
     <q-expansion-item v-if="rows.length" dense icon="data_object" label="Dati grezzi del campione" class="q-mt-md">
       <q-table :rows="tableRows" :columns="columns" row-key="_key" flat dense :pagination="{ rowsPerPage: 10 }" />
     </q-expansion-item>
@@ -23,7 +23,7 @@ import { createChart, LineSeries, CandlestickSeries, ColorType, LineType, Histog
 import { marketSeries } from '../utils/marketChart.mjs'
 import { eventKind } from '../utils/marketFlow.mjs'
 export default {
-  props: { mode: { type: String, default: 'all' }, visibleRange: Object, cursor: Object, executions: { type: Array, default: () => [] }, rows: { type: Array, default: () => [] }, start: Number, end: Number, height: { type: Number, default: 420 }, follow: Boolean, position: { type: Object, default: null }, positions: { type: Array, default: () => [] }, emptyLabel: { type: String, default: 'In attesa di dati per il simbolo selezionato.' } },
+  props: { mode: { type: String, default: 'all' }, visibleRange: Object, cursor: Object, executions: { type: Array, default: () => [] }, rows: { type: Array, default: () => [] }, timeline: { type: Array, default: () => [] }, start: Number, end: Number, height: { type: Number, default: 420 }, follow: Boolean, position: { type: Object, default: null }, positions: { type: Array, default: () => [] }, emptyLabel: { type: String, default: 'In attesa di dati per il simbolo selezionato.' } },
   emits: ['range-change', 'reset-range', 'cursor-change', 'select-minute'],
   setup (props, { emit }) {
     const wrapper = ref(null), container = ref(null), fullscreen = ref(false), hover = ref({}), hoverTime = ref('')
@@ -31,7 +31,7 @@ export default {
     const legend = [{ key: 'bid', label: 'Bid', color: 'green-8' }, { key: 'ask', label: 'Ask', color: 'blue-8' }, { key: 'trades', label: 'Scambi', color: 'orange-8' }, { key: 'bars', label: 'Barre', color: 'grey-7' }]
     const visibleLegend = computed(() => legend.filter(item => props.mode === 'all' || (props.mode === 'bars' ? item.key === 'bars' : item.key !== 'bars')))
     const positionItems = computed(() => props.positions.length ? props.positions : props.position ? [props.position] : [])
-    let chart, volumeSeries, executionSeries, simulationSeries, syncingCursor = false, positionSeries, positionLines = [], series = {}, observer, initialized = false, suppress = false, rangeTimer, disposed = false, ignoreRangeUntil = 0
+    let chart, volumeSeries, executionSeries, simulationSeries, timelineSeries, syncingCursor = false, positionSeries, positionLines = [], series = {}, observer, initialized = false, suppress = false, rangeTimer, disposed = false
     const number = value => value == null ? '—' : Number(value).toLocaleString('it-IT', { maximumFractionDigits: 5 })
     const time = value => new Date(value).toLocaleString('it-IT', { timeZone: 'Europe/Rome', hour12: false })
     function fit () { suppress = true; if (props.start != null && props.end > props.start) chart?.timeScale().setVisibleRange({ from: props.start, to: props.end }); else chart?.timeScale().fitContent(); setTimeout(() => { suppress = false }, 0); emit('reset-range') }
@@ -43,16 +43,17 @@ export default {
 
     function applyRange (range) {
       if (!chart || !range || !(range.to > range.from)) return
-      suppress = true; ignoreRangeUntil = Date.now() + 350
+      clearTimeout(rangeTimer); suppress = true
       chart.timeScale().setVisibleRange(range)
       setTimeout(() => { suppress = false }, 0)
     }
     function update () {
       if (!chart) return
       suppress = true
-      ignoreRangeUntil = Date.now() + 350
+      clearTimeout(rangeTimer)
       const previous = initialized ? chart.timeScale().getVisibleRange() : null
       const data = marketSeries(props.rows)
+      timelineSeries.setData(props.timeline.map(time => ({ time })))
       for (const key of Object.keys(series)) {
         const points = data[key].slice()
         if (props.start != null && (!points.length || points[0].time > props.start)) points.unshift({ time: props.start })
@@ -95,15 +96,17 @@ export default {
       volumeSeries.priceScale().applyOptions({ scaleMargins: { top: .85, bottom: 0 } })
       executionSeries = chart.addSeries(LineSeries, { color: '#7b1fa2', lineVisible: false, pointMarkersVisible: true, pointMarkersRadius: 5, lastValueVisible: false, priceLineVisible: false })
       simulationSeries = chart.addSeries(LineSeries, { color: '#2e7d32', lineVisible: false, pointMarkersVisible: true, pointMarkersRadius: 5, lastValueVisible: false, priceLineVisible: false })
+      timelineSeries = chart.addSeries(LineSeries, { lineVisible: false, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false })
       positionSeries = chart.addSeries(LineSeries, { lineVisible: false, pointMarkersVisible: false, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null })
       chart.subscribeCrosshairMove(param => { if (!param.time) { if (!syncingCursor && param.sourceEvent) emit('cursor-change', null); return }; if (!syncingCursor && param.sourceEvent && props.cursor?.time !== Number(param.time)) emit('cursor-change', { time: Number(param.time) }); hoverTime.value = time(Number(param.time) * 1000); const next = {}; for (const [key, item] of Object.entries(series)) { const point = param.seriesData.get(item); if (point) next[key] = number(point.value ?? point.close) } hover.value = next })
       chart.subscribeClick(param => { if (props.mode === 'bars' && param.time) emit('select-minute', { from: Number(param.time), to: Number(param.time) + 60 }) })
-      chart.timeScale().subscribeVisibleTimeRangeChange(range => { if (range && container.value) { container.value.dataset.rangeFrom = String(range.from); container.value.dataset.rangeTo = String(range.to) }; if (!range || suppress || Date.now() < ignoreRangeUntil) return; clearTimeout(rangeTimer); rangeTimer = setTimeout(() => { if (!disposed) emit('range-change', { from: Number(range.from), to: Number(range.to) }) }, 650) })
+      chart.timeScale().subscribeVisibleTimeRangeChange(range => { if (range && container.value) { container.value.dataset.rangeFrom = String(range.from); container.value.dataset.rangeTo = String(range.to) }; if (!range || suppress) return; clearTimeout(rangeTimer); rangeTimer = setTimeout(() => { if (!disposed) emit('range-change', { from: Number(range.from), to: Number(range.to) }) }, 250) })
       observer = new ResizeObserver(() => { chart?.applyOptions({ width: container.value.clientWidth, height: container.value.clientHeight }) }); observer.observe(container.value)
       update(); updatePosition()
     })
     watch(() => JSON.stringify(positionItems.value), () => { updatePosition(); update() })
     watch(() => props.rows, update)
+    watch(() => props.timeline, update)
     watch(() => [props.start, props.end], update)
     watch(() => props.visibleRange, applyRange)
     watch(() => JSON.stringify(props.executions), update)
