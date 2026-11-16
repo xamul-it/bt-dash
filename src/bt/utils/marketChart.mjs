@@ -1,8 +1,9 @@
-import { eventKind } from './marketFlow.mjs'
+import { eventKind, isOutOfSequenceTrade } from './marketFlow.mjs'
 
 export function marketSeries (rows) {
   const maps = { bid: new Map(), ask: new Map(), trades: new Map(), bars: new Map() }
   for (const row of rows) {
+    if (isOutOfSequenceTrade(row)) continue
     const time = Number.isFinite(row.time) ? row.time : Date.parse(row.timestamp || row.ts) / 1000
     if (!Number.isFinite(time)) continue
     const kind = eventKind(row)

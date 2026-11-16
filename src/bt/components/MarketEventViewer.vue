@@ -21,7 +21,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { createChart, LineSeries, CandlestickSeries, ColorType, LineType, HistogramSeries } from 'lightweight-charts'
 import { marketSeries } from '../utils/marketChart.mjs'
-import { eventKind } from '../utils/marketFlow.mjs'
+import { eventKind, isOutOfSequenceTrade } from '../utils/marketFlow.mjs'
 export default {
   props: { mode: { type: String, default: 'all' }, visibleRange: Object, cursor: Object, executions: { type: Array, default: () => [] }, rows: { type: Array, default: () => [] }, timeline: { type: Array, default: () => [] }, start: Number, end: Number, height: { type: Number, default: 420 }, follow: Boolean, position: { type: Object, default: null }, positions: { type: Array, default: () => [] }, emptyLabel: { type: String, default: 'In attesa di dati per il simbolo selezionato.' } },
   emits: ['range-change', 'reset-range', 'cursor-change', 'select-minute'],
@@ -123,7 +123,7 @@ export default {
     })
     watch(fullscreen, () => nextTick(() => window.dispatchEvent(new Event('resize'))))
     onUnmounted(() => { disposed = true; window.removeEventListener('keydown', onKeyDown); clearTimeout(rangeTimer); observer?.disconnect(); chart?.remove(); chart = null })
-    const tableRows = computed(() => props.rows.slice(-100).map((row, i) => ({ ...row, _key: row.sequence || row.id || i, kind: eventKind(row) })).reverse())
+    const tableRows = computed(() => props.rows.filter(row => !isOutOfSequenceTrade(row)).slice(-100).map((row, i) => ({ ...row, _key: row.sequence || row.id || i, kind: eventKind(row) })).reverse())
     const columns = [{ name: 'timestamp', label: 'Ora · Roma', field: 'timestamp', format: time }, { name: 'kind', label: 'Flusso', field: 'kind' }, ...[['bid_price', 'Bid'], ['ask_price', 'Ask'], ['price', 'Scambio'], ['close', 'Close']].map(([name, label]) => ({ name, label, field: name, format: number }))]
     return { positionItems, number, wrapper, container, fullscreen, visibility, visibleLegend, hover, hoverTime, fit, toggle, tableRows, columns }
   }

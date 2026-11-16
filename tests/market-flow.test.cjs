@@ -80,3 +80,19 @@ test('live chart shows the latest older quote as a marked reference without inve
   assert.notEqual(updated.bid, plot.bid)
   assert.equal(liveTickPlot([], now, undefined, null, { ...last, timestamp: '2026-11-16T21:18:00Z' }).bid, '')
 })
+
+test('out of sequence trades cannot appear as ticks or contaminate candles or sampled buckets', async () => {
+  const { isOutOfSequenceTrade, mergeTradeCandles, mergeLiveTicks, liveTickPlot } = await import('../src/bt/utils/marketFlow.mjs')
+  const now = Date.parse('2026-11-16T21:27:18.700Z')
+  const valid = { symbol: 'NVDA', event_type: 'trade', timestamp: '2026-11-16T21:27:18.510Z', price: 156.5, sequence: 1, conditions: ['@', 'T', 'I'] }
+  const late = { ...valid, timestamp: '2026-11-16T21:27:18.590Z', price: 183.91, sequence: 2, conditions: ['@', 'Z', 'I'] }
+  const extendedLate = { ...late, sequence: 3, conditions: ['U'] }
+  assert.equal(isOutOfSequenceTrade(late), true)
+  assert.equal(isOutOfSequenceTrade(extendedLate), true)
+  assert.equal(isOutOfSequenceTrade(valid), false)
+  assert.equal(isOutOfSequenceTrade({ ...late, event_type: 'quote' }), false)
+  const sampled = mergeLiveTicks([], [valid, late], false, now)
+  assert.deepEqual(sampled.map(row => row.price), [156.5])
+  assert.equal(mergeTradeCandles([], [valid, late, extendedLate], false, now)[0].high, 156.5)
+  assert.deepEqual(liveTickPlot([valid, late], now).ticks.map(tick => tick.price), [156.5])
+})

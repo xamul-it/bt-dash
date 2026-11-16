@@ -34,6 +34,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from 'boot/axios'
 import MarketAssetSelector from '../components/MarketAssetSelector.vue'
+import { isOutOfSequenceTrade } from '../utils/marketFlow.mjs'
 export default {
   components: { MarketAssetSelector },
   setup () {
@@ -48,7 +49,7 @@ export default {
       const recent = state.value.logger_alive && state.value.proxy_connected && last && Date.now() - Date.parse(last.timestamp) < 60000
       const owners = [...((state.value.manual_symbols || []).includes(symbol) ? ['Manuale'] : []), ...Object.entries(state.value.sources || {}).filter(([, symbols]) => symbols.includes(symbol)).map(([name]) => name === 'watchtower' ? 'Watchtower' : name)]
       const quote = latest.quote || {}, bid = Number(quote.bid_price), ask = Number(quote.ask_price)
-      return { symbol, bidSize: quote.bid_size == null ? '—' : Number(quote.bid_size).toLocaleString('it-IT'), askSize: quote.ask_size == null ? '—' : Number(quote.ask_size).toLocaleString('it-IT'), bid: price(bid), ask: price(ask), trade: price(latest.trade?.price), spread: bid > 0 && ask >= bid ? `${((ask - bid) / ((ask + bid) / 2) * 10000).toFixed(1)} bps` : '—', quoteTime: quote.timestamp ? new Date(quote.timestamp).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'non ancora ricevuti', owners: owners.join(' · '), recent, state: !state.value.logger_alive || !state.value.proxy_connected ? 'Registratore non raggiungibile' : !last ? 'In attesa del primo dato' : recent ? 'Dati in arrivo' : 'Ultimo dato non recente', time: last ? new Date(last.timestamp).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : '—' }
+      return { symbol, bidSize: quote.bid_size == null ? '—' : Number(quote.bid_size).toLocaleString('it-IT'), askSize: quote.ask_size == null ? '—' : Number(quote.ask_size).toLocaleString('it-IT'), bid: price(bid), ask: price(ask), trade: price(isOutOfSequenceTrade(latest.trade || {}) ? null : latest.trade?.price), spread: bid > 0 && ask >= bid ? `${((ask - bid) / ((ask + bid) / 2) * 10000).toFixed(1)} bps` : '—', quoteTime: quote.timestamp ? new Date(quote.timestamp).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : 'non ancora ricevuti', owners: owners.join(' · '), recent, state: !state.value.logger_alive || !state.value.proxy_connected ? 'Registratore non raggiungibile' : !last ? 'In attesa del primo dato' : recent ? 'Dati in arrivo' : 'Ultimo dato non recente', time: last ? new Date(last.timestamp).toLocaleString('it-IT', { timeZone: 'Europe/Rome' }) : '—' }
     }))
     const columns = [{ name: 'symbol', label: 'Titolo', field: 'symbol', align: 'left', sortable: true }, { name: 'owners', label: 'Richiesto da', field: 'owners', align: 'left' }, { name: 'state', label: 'Raccolta', field: 'state', align: 'left' }, { name: 'time', label: 'Ultimo dato · Roma', field: 'time', align: 'left' }]
     async function refresh () { if (polling || disposed) return; polling = true; try { const { data } = await api.get('/dyn/quote-monitor/status'); if (!disposed) state.value = data } catch (e) { error.value = e.response?.data?.error || e.message } finally { polling = false } }

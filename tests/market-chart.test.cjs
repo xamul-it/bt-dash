@@ -18,3 +18,14 @@ test('market series reject invalid timestamps and do not invent OHLC bars', asyn
   const data = marketSeries([{ timestamp: 'invalid', event_type: 'trade', price: 1 }, { time: 1, close: 10 }])
   assert.deepEqual(data, { bid: [], ask: [], trades: [], bars: [] })
 })
+
+test('chart filters out-of-sequence trades when conditions are available', async () => {
+  const { marketSeries } = await import('../src/bt/utils/marketChart.mjs')
+  const data = marketSeries([
+    { time: 1, event_type: 'trade', price: 100, conditions: ['@'] },
+    { time: 2, event_type: 'trade', price: 185, conditions: ['@', 'Z', 'I'] },
+    { time: 3, event_type: 'trade', price: 184, conditions: ['U'] },
+    { time: 4, event_type: 'trade', price: 101 }
+  ])
+  assert.deepEqual(data.trades.map(row => row.value), [100, 101])
+})

@@ -2,8 +2,12 @@ export function eventKind (row) {
   return row.event_type || (row.timeframe === 'quote' ? 'quote' : row.timeframe === 'trade' ? 'trade' : 'bar')
 }
 
+export function isOutOfSequenceTrade (row) {
+  return eventKind(row) === 'trade' && Array.isArray(row.conditions) && row.conditions.some(code => code === 'Z' || code === 'U')
+}
+
 export function marketPlot (rows, width = 1000) {
-  const points = rows.map(row => ({ row, time: Date.parse(row.timestamp || row.ts) })).filter(p => Number.isFinite(p.time))
+  const points = rows.filter(row => !isOutOfSequenceTrade(row)).map(row => ({ row, time: Date.parse(row.timestamp || row.ts) })).filter(p => Number.isFinite(p.time))
   const values = points.flatMap(({ row }) => eventKind(row) === 'quote' ? [row.bid_price, row.ask_price] : [eventKind(row) === 'trade' ? row.price : row.close]).map(Number).filter(n => Number.isFinite(n) && n > 0)
   if (!values.length) return null
   const start = Math.min(...points.map(p => p.time)), end = Math.max(...points.map(p => p.time))
@@ -28,7 +32,7 @@ export function mergeTradeCandles (current, incoming, reset, now) {
   const candles = new Map((reset ? [] : current).filter(c => c.minute === minute).map(c => [c.symbol, { ...c }]))
   for (const row of incoming) {
     const stamp = Date.parse(row.timestamp || row.ts), price = Number(row.price)
-    if (eventKind(row) !== 'trade' || !row.symbol || !Number.isFinite(stamp) || Math.floor(stamp / 60000) * 60000 !== minute || !(price > 0)) continue
+    if (eventKind(row) !== 'trade' || isOutOfSequenceTrade(row) || !row.symbol || !Number.isFinite(stamp) || Math.floor(stamp / 60000) * 60000 !== minute || !(price > 0)) continue
     let c = candles.get(row.symbol)
     if (!c) {
       c = { symbol: row.symbol, minute, open: price, high: price, low: price, close: price, first: stamp, last: stamp, firstSequence: row.sequence ?? 0, lastSequence: row.sequence ?? 0, maxSequence: row.sequence ?? 0 }
@@ -50,7 +54,7 @@ export function mergeLiveTicks (current, incoming, reset, now) {
   const buckets = new Map(), bars = new Map()
   for (const row of rows) {
     const stamp = Date.parse(row.timestamp || row.ts), kind = eventKind(row)
-    if (!row.symbol || !Number.isFinite(stamp)) continue
+    if (!row.symbol || !Number.isFinite(stamp) || isOutOfSequenceTrade(row)) continue
     if (kind === 'bar') {
       if (row.timeframe === 'daily' || !['open', 'high', 'low', 'close'].every(key => Number(row[key]) > 0)) continue
       const key = `${row.symbol}:${stamp}`, previous = bars.get(key)
@@ -73,7 +77,7 @@ export function mergeLiveTicks (current, incoming, reset, now) {
 
 export function liveTickPlot (rows, now, visibility = { bid: true, ask: true, trades: true, bars: true, provisional: true }, provisional = null, latestQuote = null) {
   const start = now - 60000
-  const timed = rows.map(row => ({ row, time: Date.parse(row.timestamp || row.ts) })).filter(p => Number.isFinite(p.time))
+  const timed = rows.filter(row => !isOutOfSequenceTrade(row)).map(row => ({ row, time: Date.parse(row.timestamp || row.ts) })).filter(p => Number.isFinite(p.time))
   const quoteTime = Date.parse(latestQuote?.timestamp || latestQuote?.ts)
   const quoteValid = latestQuote && Number.isFinite(quoteTime) && quoteTime <= now && Number(latestQuote.bid_price) > 0 && Number(latestQuote.ask_price) >= Number(latestQuote.bid_price)
   if (quoteValid && quoteTime >= start && !timed.some(p => eventKind(p.row) === 'quote' && p.time === quoteTime)) timed.push({ row: latestQuote, time: quoteTime })
