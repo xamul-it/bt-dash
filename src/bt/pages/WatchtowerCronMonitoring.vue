@@ -75,6 +75,31 @@
     </div>
 
     <template v-if="overview">
+      <q-card v-if="pendingBacktestPositions.length" flat bordered class="q-mb-md">
+        <q-card-section>
+          <div class="text-subtitle2">Posizioni Backtest in attesa di chiusura</div>
+          <div class="text-caption text-grey-7">Una posizione recente può essere ancora in attesa della normale chiusura. La chiusura manuale modifica solo il risultato Backtest.</div>
+          <div v-for="position in pendingBacktestPositions" :key="position.id" class="row items-center q-gutter-sm q-mt-xs">
+            <span>{{ position.symbol }} · ingresso {{ position.entry_date || position.trading_date }} · quantità {{ position.qty ?? '—' }} · prezzo {{ position.entry_price ?? '—' }}</span>
+            <q-btn dense outline no-caps color="primary" label="Chiudi Backtest" :disable="!position.entry_price || !position.qty || !position.entry_date" @click="openManualClose(position)" />
+          </div>
+        </q-card-section>
+      </q-card>
+      <q-dialog v-model="manualCloseDialog">
+        <q-card style="min-width: 360px; max-width: 95vw">
+          <q-card-section>
+            <div class="text-h6">Chiusura manuale Backtest</div>
+            <div>{{ manualClosePosition?.symbol }} · ingresso {{ manualClosePosition?.entry_date }} · quantità {{ manualClosePosition?.qty }}</div>
+            <div class="text-caption text-grey-7">Inserisci data e prezzo di uscita. Il prezzo sarà registrato come manuale.</div>
+            <q-input v-model="manualCloseDate" type="date" label="Data di uscita" stack-label />
+            <q-input v-model="manualClosePrice" type="number" min="0" step="any" label="Prezzo di uscita" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Annulla" v-close-popup />
+            <q-btn color="primary" label="Chiudi Backtest" :loading="manualCloseSaving" @click="confirmManualClose" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
       <!-- Status banner: capire in 10 secondi se c'è un problema -->
       <q-banner :class="statusBannerClass" rounded class="q-mb-md text-white">
         <template #avatar>
@@ -95,7 +120,7 @@
       <!-- Performance vs storia -->
       <q-card flat bordered class="q-mb-md">
         <q-card-section>
-          <div class="text-subtitle2 text-grey-8">La strategia performa come in passato?</div>
+          <div class="text-subtitle2 text-grey-8">Backtest recente rispetto alla baseline Backtrader</div>
         </q-card-section>
         <q-separator />
         <q-card-section>
@@ -144,7 +169,13 @@
                 <div v-if="calculationJob.error" class="text-negative text-caption q-mt-xs">{{ calculationJob.error }}</div>
               </q-card-section>
             </q-card>
-            <div class="text-body1">Confronto della baseline con i replay della riconciliazione giornaliera.</div>
+            <div class="text-body1">Baseline Backtrader storica confrontata con i risultati Backtest recenti della riconciliazione giornaliera.</div>
+            <q-banner v-if="differentComparisonDays.length" dense class="bg-orange-1 text-dark q-mt-sm">
+              Le finestre Backtest e Alpaca non contengono sempre le stesse giornate: i valori delle due tabelle non sono direttamente confrontabili.
+              <div v-for="item in differentComparisonDays" :key="item.days" class="text-caption">
+                {{ item.days }} giornate: solo Backtest {{ item.backtestOnly.join(', ') || 'nessuna' }}; solo Alpaca {{ item.alpacaOnly.join(', ') || 'nessuna' }}.
+              </div>
+            </q-banner>
             <BaselineComparison :selected-baseline="selectedBaseline" :windows="comparisonWindows"
               daily-series-label="risultati giornalieri dei run"
               calendar-note="Le finestre contengono 3, 5…25 giornate valide, saltando quelle aperte o senza trade." />
@@ -155,7 +186,7 @@
       <!-- Alpaca vs baseline Backtrader -->
       <q-card flat bordered class="q-mb-md">
         <q-card-section>
-          <div class="text-subtitle2 text-grey-8">Su Alpaca performa come Backtrader in passato?</div>
+          <div class="text-subtitle2 text-grey-8">Alpaca recente rispetto alla baseline Backtrader</div>
         </q-card-section>
         <q-separator />
         <q-card-section>
@@ -164,7 +195,10 @@
           </div>
           <template v-else>
             <div class="text-body1">
-              Baseline Backtrader selezionata confrontata con gli eseguiti Alpaca delle ultime finestre di trading.
+              Baseline Backtrader storica confrontata con gli eseguiti Alpaca recenti. Le giornate valide sono selezionate indipendentemente dal Backtest.
+            </div>
+            <div v-if="differentComparisonDays.length" class="text-warning text-weight-medium q-mt-xs">
+              Le date differiscono tra le due tabelle: vedi il dettaglio sopra la tabella Backtest.
             </div>
             <BaselineComparison :selected-baseline="selectedBaseline" :windows="alpacaComparisonWindows"
               daily-series-label="risultati giornalieri dei run"
@@ -484,9 +518,17 @@ export default {
       calculationPollingError: '',
       calculationLogDialog: false,
       calculationLogText: '',
+      manualCloseDialog: false,
+      manualClosePosition: null,
+      manualCloseDate: '',
+      manualClosePrice: '',
+      manualCloseSaving: false,
     }
   },
   computed: {
+    pendingBacktestPositions() {
+      return (this.overview?.entry_settlements || []).filter(row => row.source === 'backtest' && row.status === 'pending')
+    },
     profileOptions() {
       return this.profiles.map((p) => ({
         label: `${p.profile} (${p.strategy || 'strategia sconosciuta'})`,
@@ -595,6 +637,18 @@ export default {
         days,
         comparison: this.referenceMatchesSelection ? this.overview?.reconciliation_statistics?.alpaca?.[String(days)] || null : null,
       }))
+    },
+    differentComparisonDays() {
+      return this.comparisonWindows.map((window, index) => {
+        const backtest = window.comparison?.recent?.daily_series
+        const alpaca = this.alpacaComparisonWindows[index]?.comparison?.recent?.daily_series
+        if (!Array.isArray(backtest) || !Array.isArray(alpaca) || !backtest.length || !alpaca.length) return null
+        const btDays = new Set(backtest.filter(([, value]) => value != null).map(([day]) => day))
+        const alpacaDays = new Set(alpaca.filter(([, value]) => value != null).map(([day]) => day))
+        const backtestOnly = [...btDays].filter(day => !alpacaDays.has(day))
+        const alpacaOnly = [...alpacaDays].filter(day => !btDays.has(day))
+        return backtestOnly.length || alpacaOnly.length ? { days: window.days, backtestOnly, alpacaOnly } : null
+      }).filter(Boolean)
     },
     replayParamsVersion() {
       return (result) => {
@@ -771,6 +825,39 @@ export default {
     this.stopCalculationPolling()
   },
   methods: {
+    openManualClose(position) {
+      this.manualClosePosition = position
+      this.manualCloseDate = ''
+      this.manualClosePrice = ''
+      this.manualCloseDialog = true
+    },
+    confirmManualClose() {
+      const position = this.manualClosePosition
+      const profile = this.selectedProfile
+      const price = Number(this.manualClosePrice)
+      const exitDate = this.manualCloseDate
+      if (!position || !profile || !exitDate || !Number.isFinite(price) || price <= 0 || exitDate < position.entry_date) {
+        this.$q.notify({ color: 'negative', message: 'Inserisci una data valida e un prezzo positivo.' })
+        return
+      }
+      this.$q.dialog({
+        title: 'Conferma chiusura Backtest',
+        message: `Profilo ${profile}: chiudere ${position.symbol}, quantità ${position.qty}, il ${exitDate} al prezzo manuale ${price}?`,
+        ok: { label: 'Conferma', color: 'primary' }, cancel: { label: 'Annulla', flat: true },
+      }).onOk(async () => {
+        this.manualCloseSaving = true
+        try {
+          await api.post(`/dyn/obs/watchtower/cron/${encodeURIComponent(profile)}/backtest-settlements/${position.id}/close`, { exit_date: exitDate, exit_price: price })
+          this.manualCloseDialog = false
+          if (profile === this.selectedProfile) await this.loadOverview()
+          this.$q.notify({ color: 'positive', message: 'Posizione Backtest chiusa con prezzo manuale.' })
+        } catch (error) {
+          this.$q.notify({ color: 'negative', message: error?.response?.data?.error || error?.message || 'Chiusura non riuscita' })
+        } finally {
+          this.manualCloseSaving = false
+        }
+      })
+    },
     baselineStatsUrl(baseline) {
       if (!baseline?.id || !baseline?.profile || !baseline?.run_id) return ''
       return `${constants.API_BASE_URL.replace(/\/$/, '')}/dyn/obs/watchtower/cron/${encodeURIComponent(baseline.profile)}/baselines/${encodeURIComponent(baseline.id)}/stats.html`

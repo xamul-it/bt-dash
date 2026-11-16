@@ -34,3 +34,25 @@ test('banner color and icon follow the current row, not historical pending or ot
   assert.equal(computed('statusBannerClass').call(context), 'bg-grey-7')
   assert.equal(computed('statusIcon').call(context), 'info')
 })
+
+test('performance warning identifies different realised dates, including zero returns', () => {
+  const window = (days, series) => ({ days, comparison: { recent: { daily_series: series } } })
+  const context = {
+    comparisonWindows: [window(10, [['2026-10-29', -0.03], ['2026-11-11', 0]])],
+    alpacaComparisonWindows: [window(10, [['2026-11-10', 0.05], ['2026-11-11', 0]])],
+  }
+  assert.deepEqual(computed('differentComparisonDays').call(context), [
+    { days: 10, backtestOnly: ['2026-10-29'], alpacaOnly: ['2026-11-10'] },
+  ])
+  context.alpacaComparisonWindows = context.comparisonWindows
+  assert.deepEqual(computed('differentComparisonDays').call(context), [])
+})
+
+test('manual closure lists only pending Backtest positions', () => {
+  const context = { overview: { entry_settlements: [
+    { id: 1, source: 'backtest', status: 'pending' },
+    { id: 2, source: 'alpaca', status: 'pending' },
+    { id: 3, source: 'backtest', status: 'closed' },
+  ] } }
+  assert.deepEqual(computed('pendingBacktestPositions').call(context).map(row => row.id), [1])
+})
