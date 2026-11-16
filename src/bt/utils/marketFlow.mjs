@@ -71,21 +71,25 @@ export function mergeLiveTicks (current, incoming, reset, now) {
   return [...buckets.values(), ...recentBars].sort((a, b) => Date.parse(a.timestamp || a.ts) - Date.parse(b.timestamp || b.ts))
 }
 
-export function liveTickPlot (rows, now, visibility = { bid: true, ask: true, trades: true, bars: true, provisional: true }, provisional = null) {
+export function liveTickPlot (rows, now, visibility = { bid: true, ask: true, trades: true, bars: true, provisional: true }, provisional = null, latestQuote = null) {
   const start = now - 60000
   const timed = rows.map(row => ({ row, time: Date.parse(row.timestamp || row.ts) })).filter(p => Number.isFinite(p.time))
+  const quoteTime = Date.parse(latestQuote?.timestamp || latestQuote?.ts)
+  const quoteValid = latestQuote && Number.isFinite(quoteTime) && quoteTime <= now && Number(latestQuote.bid_price) > 0 && Number(latestQuote.ask_price) >= Number(latestQuote.bid_price)
+  if (quoteValid && quoteTime >= start && !timed.some(p => eventKind(p.row) === 'quote' && p.time === quoteTime)) timed.push({ row: latestQuote, time: quoteTime })
+  const staleQuote = quoteValid && quoteTime < start && !timed.some(p => eventKind(p.row) === 'quote' && p.time >= start && p.time <= now) ? latestQuote : null
   const points = timed.filter(p => eventKind(p.row) !== 'bar' && p.time >= start && p.time <= now).sort((a, b) => a.time - b.time)
   const bars = timed.filter(p => eventKind(p.row) === 'bar' && p.time <= now && ['open', 'high', 'low', 'close'].every(key => Number(p.row[key]) > 0)).sort((a, b) => a.time - b.time).slice(-3)
   const forming = provisional?.minute === Math.floor(now / 60000) * 60000 ? provisional : null
-  const values = [...points.flatMap(({ row }) => eventKind(row) === 'quote' ? [visibility.bid && row.bid_price, visibility.ask && row.ask_price] : [visibility.trades && row.price]), ...(visibility.bars ? bars.flatMap(({ row }) => [row.high, row.low]) : []), ...(visibility.provisional && forming ? [forming.high, forming.low] : [])].map(Number).filter(n => Number.isFinite(n) && n > 0)
+  const values = [...points.flatMap(({ row }) => eventKind(row) === 'quote' ? [visibility.bid && row.bid_price, visibility.ask && row.ask_price] : [visibility.trades && row.price]), ...(staleQuote ? [visibility.bid && staleQuote.bid_price, visibility.ask && staleQuote.ask_price] : []), ...(visibility.bars ? bars.flatMap(({ row }) => [row.high, row.low]) : []), ...(visibility.provisional && forming ? [forming.high, forming.low] : [])].map(Number).filter(n => Number.isFinite(n) && n > 0)
   const x = time => (time - start) / 60000 * 750 + 160
   if (!values.length) return { start, end: now, bars: [], bid: '', ask: '', ticks: [], levels: [] }
   const min = Math.min(...values), max = Math.max(...values), pad = (max - min || max * 0.001) * 0.12
   const low = min - pad, high = max + pad, y = value => 370 - (value - low) / (high - low) * 350
   const path = field => {
     const quotes = points.filter(p => eventKind(p.row) === 'quote' && Number(p.row[field]) > 0)
-    if (!quotes.length) return ''
+    if (!quotes.length) return staleQuote ? `M160,${y(Number(staleQuote[field])).toFixed(2)}H910` : ''
     return quotes.map((p, i) => `${i ? 'H' : 'M'}${x(p.time).toFixed(2)}${i ? 'V' : ','}${y(Number(p.row[field])).toFixed(2)}`).join(' ') + `H${x(now).toFixed(2)}`
   }
-  return { start, end: now, bid: path('bid_price'), ask: path('ask_price'), bars: bars.map(({ row, time }, i) => ({ row, time, x: 84 - (bars.length - 1 - i) * 28, high: y(Number(row.high)), low: y(Number(row.low)), open: y(Number(row.open)), close: y(Number(row.close)) })), provisional: forming && { row: forming, time: forming.minute, x: 112, high: y(forming.high), low: y(forming.low), open: y(forming.open), close: y(forming.close) }, ticks: points.filter(p => eventKind(p.row) === 'trade' && Number(p.row.price) > 0).map(p => ({ x: x(p.time), y: y(Number(p.row.price)), time: p.time, price: p.row.price })), levels: [0, 1, 2, 3, 4].map(i => ({ y: 20 + i * 87.5, price: high - (high - low) * i / 4 })) }
+  return { start, end: now, staleQuote: Boolean(staleQuote), bid: path('bid_price'), ask: path('ask_price'), bars: bars.map(({ row, time }, i) => ({ row, time, x: 84 - (bars.length - 1 - i) * 28, high: y(Number(row.high)), low: y(Number(row.low)), open: y(Number(row.open)), close: y(Number(row.close)) })), provisional: forming && { row: forming, time: forming.minute, x: 112, high: y(forming.high), low: y(forming.low), open: y(forming.open), close: y(forming.close) }, ticks: points.filter(p => eventKind(p.row) === 'trade' && Number(p.row.price) > 0).map(p => ({ x: x(p.time), y: y(Number(p.row.price)), time: p.time, price: p.row.price })), levels: [0, 1, 2, 3, 4].map(i => ({ y: 20 + i * 87.5, price: high - (high - low) * i / 4 })) }
 }

@@ -65,3 +65,18 @@ test('forming candle uses every received trade and resets on the minute boundary
   assert.deepEqual(mergeTradeCandles(candles, [], false, start + 60000), [])
   assert.deepEqual(mergeTradeCandles(candles, [], true, now), [])
 })
+
+test('live chart shows the latest older quote as a marked reference without inventing updates', async () => {
+  const { liveTickPlot } = await import('../src/bt/utils/marketFlow.mjs')
+  const now = Date.parse('2026-11-16T21:17:50Z')
+  const last = { symbol: 'CMCSA', event_type: 'quote', timestamp: '2026-11-16T21:13:39Z', bid_price: 25.56, ask_price: 25.71 }
+  const plot = liveTickPlot([], now, undefined, null, last)
+  assert.equal(plot.staleQuote, true)
+  assert.match(plot.bid, /^M160,.*H910$/)
+  assert.match(plot.ask, /^M160,.*H910$/)
+  const recent = { ...last, timestamp: '2026-11-16T21:17:40Z', bid_price: 25.6 }
+  const updated = liveTickPlot([recent], now, undefined, null, last)
+  assert.equal(updated.staleQuote, false)
+  assert.notEqual(updated.bid, plot.bid)
+  assert.equal(liveTickPlot([], now, undefined, null, { ...last, timestamp: '2026-11-16T21:18:00Z' }).bid, '')
+})

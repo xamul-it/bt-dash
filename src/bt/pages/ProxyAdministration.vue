@@ -7,7 +7,7 @@
       <q-banner v-if="gap" class="bg-amber-1 q-mb-md">Campione incompleto: durante la pausa o tra due letture sono arrivati più eventi di quelli conservati nel buffer. Le registrazioni su disco sono consultabili nella pagina separata.</q-banner>
       <div class="text-caption q-mb-sm">Ricevuti dall'avvio del logger per {{ selected || '—' }}: {{ counts }}. La pausa ferma solo la visualizzazione.</div>
       <div class="text-caption q-mb-sm">Periodo nel campione per {{ selected || '—' }}: {{ sampleRange }}. Per periodi precedenti usa Gestione storico.</div>
-      <OpenPositionChart :key="selected" :symbol="selected" v-slot="{ positions }"><LiveTickChart :rows="visible" :now="now" :positions="positions" :provisional="candles.find(c => c.symbol === selected)" /></OpenPositionChart>
+      <OpenPositionChart :key="selected" :symbol="selected" v-slot="{ positions }"><LiveTickChart :rows="visible" :now="now" :positions="positions" :provisional="candles.find(c => c.symbol === selected)" :latest-quote="state.latest?.[selected]?.quote || null" /></OpenPositionChart>
     </q-card-section></q-card>
     <q-card flat bordered class="q-mb-md"><q-card-section>
       <div class="row q-gutter-md"><q-chip v-for="service in state.services || []" :key="service.name" :color="service.active_ok ? 'green-2' : 'red-2'">{{ service.name }} · {{ service.active }} / {{ service.sub }}</q-chip><q-chip :color="fresh && state.proxy_connected ? 'green-2' : 'amber-2'">Telemetria {{ fresh && state.proxy_connected ? 'aggiornata' : 'non confermata' }}</q-chip><q-chip>Feed {{ state.feed || 'non disponibile' }}</q-chip></div>

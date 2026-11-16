@@ -4,6 +4,7 @@
       <q-chip v-for="item in legend" :key="item.key" clickable :outline="!visibility[item.key]" :color="visibility[item.key] ? item.color : 'grey-3'" :text-color="visibility[item.key] ? 'white' : 'grey-8'" @click="visibility[item.key] = !visibility[item.key]">{{ item.label }}</q-chip>
       <span class="text-caption text-grey-7 q-ml-auto">Ultimi 60 secondi · Europe/Rome</span>
     </div>
+    <div v-if="quoteLabel" class="text-caption q-mb-sm" :class="plot.staleQuote ? 'text-orange-9' : 'text-grey-7'">{{ quoteLabel }}<span v-if="plot.staleQuote"> · ultima quota fuori dalla finestra, linea tratteggiata</span></div>
     <div v-if="positions.length" class="text-caption text-purple q-mb-sm" aria-label="Posizioni aperte sul grafico">
       <span v-for="(position, i) in positions" :key="i" class="q-mr-md">{{ position.account }} · {{ position.side }} {{ position.qty }} · PMC {{ price(position.avg_entry_price) }}</span>
     </div>
@@ -24,8 +25,8 @@
         <rect :x="plot.provisional.x - markerRadius.x * 2" :y="Math.min(plot.provisional.open, plot.provisional.close)" :width="markerRadius.x * 4" :height="Math.max(Math.abs(plot.provisional.close - plot.provisional.open), markerRadius.y * 0.4)" fill="#757575" />
         <text :x="plot.provisional.x" y="400" text-anchor="middle" class="axis bar-time">{{ minute(plot.provisional.time) }}</text>
       </g>
-      <path v-if="visibility.bid" :d="plot.bid" fill="none" stroke="#2e7d32" stroke-width="2" vector-effect="non-scaling-stroke" />
-      <path v-if="visibility.ask" :d="plot.ask" fill="none" stroke="#1976d2" stroke-width="2" vector-effect="non-scaling-stroke" />
+      <path v-if="visibility.bid" :d="plot.bid" fill="none" stroke="#2e7d32" stroke-width="2" :stroke-dasharray="plot.staleQuote ? '6 4' : null" vector-effect="non-scaling-stroke" />
+      <path v-if="visibility.ask" :d="plot.ask" fill="none" stroke="#1976d2" stroke-width="2" :stroke-dasharray="plot.staleQuote ? '6 4' : null" vector-effect="non-scaling-stroke" />
       <line v-for="(line, i) in positionLines" :key="`p${i}`" x1="10" x2="910" :y1="line" :y2="line" stroke="#8e24aa" stroke-dasharray="5 4" vector-effect="non-scaling-stroke" />
       <ellipse v-for="(tick, i) in visibility.trades ? plot.ticks : []" :key="i" :cx="tick.x" :cy="tick.y" :rx="markerRadius.x" :ry="markerRadius.y" fill="#ef6c00"><title>{{ time(tick.time) }} · {{ price(tick.price) }}</title></ellipse>
       <text v-if="!plot.levels.length" x="535" y="200" text-anchor="middle" class="axis">In attesa di dati nella finestra</text>
@@ -36,7 +37,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { liveTickPlot } from '../utils/marketFlow.mjs'
 export default {
-  props: { rows: { type: Array, default: () => [] }, now: { type: Number, required: true }, positions: { type: Array, default: () => [] }, provisional: { type: Object, default: null } },
+  props: { rows: { type: Array, default: () => [] }, now: { type: Number, required: true }, positions: { type: Array, default: () => [] }, provisional: { type: Object, default: null }, latestQuote: { type: Object, default: null } },
   setup (props) {
     const visibility = reactive({ bid: true, ask: true, trades: true, bars: true, provisional: true })
     const plotElement = ref(null), markerRadius = ref({ x: 2.5, y: 2.5 })
@@ -50,7 +51,13 @@ export default {
     })
     onUnmounted(() => observer?.disconnect())
     const legend = [{ key: 'bid', label: 'Bid', color: 'green-8' }, { key: 'ask', label: 'Ask', color: 'blue-8' }, { key: 'trades', label: 'Scambi', color: 'orange-8' }, { key: 'bars', label: 'Barre Alpaca', color: 'grey-8' }, { key: 'provisional', label: 'Barra da scambi', color: 'grey-7' }]
-    const plot = computed(() => liveTickPlot(props.rows, props.now, visibility, props.provisional))
+    const plot = computed(() => liveTickPlot(props.rows, props.now, visibility, props.provisional, props.latestQuote))
+    const quoteLabel = computed(() => {
+      const stamp = Date.parse(props.latestQuote?.timestamp || props.latestQuote?.ts)
+      if (!Number.isFinite(stamp) || stamp > props.now) return ''
+      const age = Math.floor((props.now - stamp) / 1000)
+      return `Ultimo bid/ask ricevuto: ${time(stamp)} · ${age} s fa`
+    })
     const positionLines = computed(() => {
       if (!plot.value.levels.length) return []
       const high = plot.value.levels[0].price, low = plot.value.levels[4].price
@@ -59,7 +66,7 @@ export default {
     const time = stamp => new Date(stamp).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour12: false })
     const minute = stamp => new Date(stamp).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false })
     const price = value => Number(value).toLocaleString('it-IT', { maximumFractionDigits: 5 })
-    return { visibility, legend, plot, positionLines, plotElement, markerRadius, time, minute, price }
+    return { visibility, legend, plot, positionLines, plotElement, markerRadius, quoteLabel, time, minute, price }
   }
 }
 </script>
