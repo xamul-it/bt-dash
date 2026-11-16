@@ -75,16 +75,6 @@
     </div>
 
     <template v-if="overview">
-      <q-card v-if="pendingBacktestPositions.length" flat bordered class="q-mb-md">
-        <q-card-section>
-          <div class="text-subtitle2">Posizioni Backtest in attesa di chiusura</div>
-          <div class="text-caption text-grey-7">Una posizione recente può essere ancora in attesa della normale chiusura. La chiusura manuale modifica solo il risultato Backtest.</div>
-          <div v-for="position in pendingBacktestPositions" :key="position.id" class="row items-center q-gutter-sm q-mt-xs">
-            <span>{{ position.symbol }} · ingresso {{ position.entry_date || position.trading_date }} · quantità {{ position.qty ?? '—' }} · prezzo {{ position.entry_price ?? '—' }}</span>
-            <q-btn dense outline no-caps color="primary" label="Chiudi Backtest" :disable="!position.entry_price || !position.qty || !position.entry_date" @click="openManualClose(position)" />
-          </div>
-        </q-card-section>
-      </q-card>
       <q-dialog v-model="manualCloseDialog">
         <q-card style="min-width: 360px; max-width: 95vw">
           <q-card-section>
@@ -304,6 +294,13 @@
                                   >
                                     {{ alpacaOrderSettlementText(order, props.row.settlements?.alpaca) }}
                                   </q-item-label>
+                                </q-item-section>
+                                <q-item-section v-if="source === 'backtest' && backtestOrderSettlement(order, props.row.settlements?.backtest)?.status === 'pending'" side>
+                                  <q-btn dense outline no-caps color="primary" label="Chiudi Backtest"
+                                    :disable="!backtestOrderSettlement(order, props.row.settlements?.backtest)?.entry_price || !backtestOrderSettlement(order, props.row.settlements?.backtest)?.qty || !backtestOrderSettlement(order, props.row.settlements?.backtest)?.entry_date"
+                                    @click="openManualClose(backtestOrderSettlement(order, props.row.settlements?.backtest))">
+                                    <q-tooltip>Chiude soltanto questa posizione Backtest con data e prezzo manuali.</q-tooltip>
+                                  </q-btn>
                                 </q-item-section>
                               </q-item>
                           </q-list>
@@ -526,9 +523,6 @@ export default {
     }
   },
   computed: {
-    pendingBacktestPositions() {
-      return (this.overview?.entry_settlements || []).filter(row => row.source === 'backtest' && row.status === 'pending')
-    },
     profileOptions() {
       return this.profiles.map((p) => ({
         label: `${p.profile} (${p.strategy || 'strategia sconosciuta'})`,

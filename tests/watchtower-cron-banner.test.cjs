@@ -48,11 +48,9 @@ test('performance warning identifies different realised dates, including zero re
   assert.deepEqual(computed('differentComparisonDays').call(context), [])
 })
 
-test('manual closure lists only pending Backtest positions', () => {
-  const context = { overview: { entry_settlements: [
-    { id: 1, source: 'backtest', status: 'pending' },
-    { id: 2, source: 'alpaca', status: 'pending' },
-    { id: 3, source: 'backtest', status: 'closed' },
-  ] } }
-  assert.deepEqual(computed('pendingBacktestPositions').call(context).map(row => row.id), [1])
+test('manual closure is on the open Backtest order row', () => {
+  const row = source.match(/<q-item v-for="\(order, index\) in props\.row\.decisions\[source\]\.orders"[\s\S]*?<\/q-item>/)[0]
+  assert.match(row, /source === 'backtest'.*status === 'pending'/)
+  assert.match(row, /label="Chiudi Backtest"/)
+  assert.match(row, /openManualClose\(backtestOrderSettlement\(order, props\.row\.settlements\?\.backtest\)\)/)
 })
