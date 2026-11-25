@@ -268,6 +268,7 @@
                         <div v-if="!props.row.decisions?.[source]" class="text-grey-6 text-caption">Nessuna ricevuta del run.</div>
                         <template v-else>
                           <div v-if="props.row.decisions[source].error" class="text-negative text-caption">{{ decisionErrorText(props.row.decisions[source]) }}</div>
+                          <div class="text-caption text-grey-8 q-mb-xs">Barra del segnale: {{ receiptSignalDate(props.row.decisions[source]) || 'non disponibile' }}</div>
                           <div v-if="!(props.row.decisions[source].orders || []).length" class="text-caption text-grey-7">
                             Nessun ordine. {{ decisionReasons(props.row.decisions[source]) }}
                           </div>
@@ -279,6 +280,9 @@
                                     <q-icon v-if="orderBrokerDetail(order, source, props.row.settlements?.[source])" name="info_outline" size="15px" class="cursor-help q-ml-xs">
                                       <q-tooltip max-width="520px">{{ orderBrokerDetail(order, source, props.row.settlements?.[source]) }}</q-tooltip>
                                     </q-icon>
+                                  </q-item-label>
+                                  <q-item-label caption :class="orderSignalMismatch(props.row.decisions[source], order) ? 'text-negative' : 'text-grey-7'">
+                                    Barra {{ order.symbol }}: {{ receiptOrderDate(props.row.decisions[source], order) || 'non disponibile' }}<template v-if="orderSignalMismatch(props.row.decisions[source], order)"> · diversa dalla barra del segnale</template>
                                   </q-item-label>
                                   <q-item-label
                                     v-if="source === 'backtest' && backtestOrderSettlement(order, props.row.settlements?.backtest)"
@@ -471,6 +475,7 @@ import DashboardFavorite from '../components/DashboardFavorite.vue'
 import DailyReconciliationTable from '../components/DailyReconciliationTable.vue'
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
+import { receiptSignalDate, receiptOrderDate, orderSignalMismatch } from '../utils/entryReceiptDates.mjs'
 
 const CATEGORY_LABELS = {
   never_submitted: 'atteso dal backtest ma nessun ordine reale trovato',
@@ -819,6 +824,9 @@ export default {
     this.stopCalculationPolling()
   },
   methods: {
+    receiptSignalDate,
+    receiptOrderDate,
+    orderSignalMismatch,
     openManualClose(position) {
       this.manualClosePosition = position
       this.manualCloseDate = ''
