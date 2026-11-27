@@ -83,10 +83,25 @@
             <div class="text-caption text-grey-7">Inserisci data e prezzo di uscita. Il prezzo sarà registrato come manuale.</div>
             <q-input v-model="manualCloseDate" type="date" label="Data di uscita" stack-label />
             <q-input v-model="manualClosePrice" type="number" min="0" step="any" label="Prezzo di uscita" />
+            <q-input v-model="manualCloseComment" type="textarea" label="Motivo della forzatura *" />
           </q-card-section>
           <q-card-actions align="right">
             <q-btn flat label="Annulla" v-close-popup />
             <q-btn color="primary" label="Chiudi Backtest" :loading="manualCloseSaving" @click="confirmManualClose" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+      <q-dialog v-model="manualCancelDialog">
+        <q-card style="min-width: 360px; max-width: 95vw">
+          <q-card-section>
+            <div class="text-h6">Annulla ordine Backtest</div>
+            <div>{{ manualCancelPosition?.symbol }} · {{ manualCancelPosition?.trading_date }}</div>
+            <div class="text-caption text-grey-7">L'ordine sarà escluso dai risultati Backtest e resterà visibile come annullato.</div>
+            <q-input v-model="manualCancelComment" type="textarea" label="Motivo dell'annullamento *" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn flat label="Indietro" v-close-popup />
+            <q-btn color="negative" label="Annulla ordine" :loading="manualCloseSaving" @click="confirmManualCancel" />
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -305,6 +320,8 @@
                                     @click="openManualClose(backtestOrderSettlement(order, props.row.settlements?.backtest))">
                                     <q-tooltip>Chiude soltanto questa posizione Backtest con data e prezzo manuali.</q-tooltip>
                                   </q-btn>
+                                  <q-btn dense outline no-caps color="negative" label="Annulla ordine" class="q-mt-xs"
+                                    @click="openManualCancel(backtestOrderSettlement(order, props.row.settlements?.backtest))" />
                                 </q-item-section>
                               </q-item>
                           </q-list>
@@ -526,6 +543,10 @@ export default {
       manualClosePosition: null,
       manualCloseDate: '',
       manualClosePrice: '',
+      manualCloseComment: '',
+      manualCancelDialog: false,
+      manualCancelPosition: null,
+      manualCancelComment: '',
       manualCloseSaving: false,
     }
   },
@@ -836,6 +857,7 @@ export default {
       this.manualClosePosition = position
       this.manualCloseDate = ''
       this.manualClosePrice = ''
+      this.manualCloseComment = ''
       this.manualCloseDialog = true
     },
     confirmManualClose() {
@@ -843,8 +865,9 @@ export default {
       const profile = this.selectedProfile
       const price = Number(this.manualClosePrice)
       const exitDate = this.manualCloseDate
-      if (!position || !profile || !exitDate || !Number.isFinite(price) || price <= 0 || exitDate < position.entry_date) {
-        this.$q.notify({ color: 'negative', message: 'Inserisci una data valida e un prezzo positivo.' })
+      const comment = this.manualCloseComment.trim()
+      if (!position || !profile || !exitDate || !Number.isFinite(price) || price <= 0 || exitDate < position.entry_date || !comment) {
+        this.$q.notify({ color: 'negative', message: 'Inserisci data, prezzo positivo e motivo della forzatura.' })
         return
       }
       this.$q.dialog({
@@ -854,12 +877,43 @@ export default {
       }).onOk(async () => {
         this.manualCloseSaving = true
         try {
-          await api.post(`/dyn/obs/watchtower/cron/${encodeURIComponent(profile)}/backtest-settlements/${position.id}/close`, { exit_date: exitDate, exit_price: price })
+          await api.post(`/dyn/obs/watchtower/cron/${encodeURIComponent(profile)}/backtest-settlements/${position.id}/close`, { exit_date: exitDate, exit_price: price, comment })
           this.manualCloseDialog = false
           if (profile === this.selectedProfile) await this.loadOverview()
           this.$q.notify({ color: 'positive', message: 'Posizione Backtest chiusa con prezzo manuale.' })
         } catch (error) {
           this.$q.notify({ color: 'negative', message: error?.response?.data?.error || error?.message || 'Chiusura non riuscita' })
+        } finally {
+          this.manualCloseSaving = false
+        }
+      })
+    },
+    openManualCancel(position) {
+      this.manualCancelPosition = position
+      this.manualCancelComment = ''
+      this.manualCancelDialog = true
+    },
+    confirmManualCancel() {
+      const position = this.manualCancelPosition
+      const profile = this.selectedProfile
+      const comment = this.manualCancelComment.trim()
+      if (!position || !profile || !comment) {
+        this.$q.notify({ color: 'negative', message: 'Inserisci il motivo dell’annullamento.' })
+        return
+      }
+      this.$q.dialog({
+        title: 'Conferma annullamento Backtest',
+        message: `Profilo ${profile}: annullare l'ordine Backtest ${position.symbol} del ${position.trading_date}?`,
+        ok: { label: 'Conferma', color: 'negative' }, cancel: { label: 'Indietro', flat: true },
+      }).onOk(async () => {
+        this.manualCloseSaving = true
+        try {
+          await api.post(`/dyn/obs/watchtower/cron/${encodeURIComponent(profile)}/backtest-settlements/${position.id}/cancel`, { comment })
+          this.manualCancelDialog = false
+          if (profile === this.selectedProfile) await this.loadOverview()
+          this.$q.notify({ color: 'positive', message: 'Ordine Backtest annullato.' })
+        } catch (error) {
+          this.$q.notify({ color: 'negative', message: error?.response?.data?.error || error?.message || 'Annullamento non riuscito' })
         } finally {
           this.manualCloseSaving = false
         }
@@ -970,6 +1024,8 @@ export default {
       const pending = settlements.filter((s) => s.status === 'pending').length
       const closed = settlements.filter((s) => s.status === 'closed')
       const parts = []
+      const cancelled = settlements.filter(s => s.source === 'backtest' && s.detail?.manual_cancelled)
+      if (cancelled.length) parts.push(`${cancelled.length} annullata/e manualmente`)
       if (pending) parts.push(`${pending} chiusura/e pending`)
       if (closed.length) {
         const pnl = closed.reduce((sum, s) => sum + Number(s.pnl || 0), 0)
@@ -979,7 +1035,7 @@ export default {
       return parts.join(' · ') || 'chiusura non comunicata'
     },
     originalDayReturn(settlements) {
-      const executed = (settlements || []).filter(s => !(s.source === 'alpaca'
+      const executed = (settlements || []).filter(s => !(s.source === 'backtest' && s.detail?.manual_cancelled) && !(s.source === 'alpaca'
         && s.detail?.pending_reason === 'entry_not_filled' && Number(s.detail?.entry_filled_qty) === 0))
       if (!executed.length || executed.some(s => s.status !== 'closed' || s.entry_price == null || s.pnl == null)) return null
       const capital = executed.reduce((sum, s) => sum + Number(s.entry_price) * Number(s.qty), 0)
@@ -1098,6 +1154,7 @@ export default {
     backtestOrderSettlementText(order, settlements, verification = null) {
       const settled = this.backtestOrderSettlement(order, settlements)
       if (!settled) return ''
+      if (settled.detail?.manual_cancelled) return `ANNULLATO manualmente · Motivo: ${settled.detail.manual_comment}`
       if (settled.status !== 'closed') {
         const check = (verification?.evidence?.checks || []).find(c => c.symbol === settled.symbol)
         const reasons = (check?.reasons || []).filter(reason => reason.code !== 'reason_unavailable').map(reason => reason.label || reason.code)
@@ -1108,7 +1165,7 @@ export default {
       const gain = settled.pnl == null || settled.entry_price == null
         ? 'P&L non disponibile: prezzo di esecuzione ingresso non disponibile'
         : `P&L ${settled.pnl >= 0 ? '+' : ''}${this.num(settled.pnl)}${settled.pnl_pct != null ? ` (${this.signedPct(settled.pnl_pct)})` : ''}`
-      return `CHIUSURA · SELL ${settled.symbol} · ${this.qty(settled.qty)} @ ${this.num(settled.exit_price)} · ${this.formatDate(settled.exit_date)} · ${gain}`
+      return `CHIUSURA · SELL ${settled.symbol} · ${this.qty(settled.qty)} @ ${this.num(settled.exit_price)} · ${this.formatDate(settled.exit_date)} · ${gain}${settled.detail?.exit_price_source === 'manual' ? ` · Manuale${settled.detail?.manual_comment ? ` · Motivo: ${settled.detail.manual_comment}` : ''}` : ''}`
     },
     alpacaOrderSettlement(order, settlements) {
       const symbol = String(order?.symbol || '').toUpperCase()

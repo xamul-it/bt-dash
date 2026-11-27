@@ -54,3 +54,15 @@ test('manual closure is on the open Backtest order row', () => {
   assert.match(row, /label="Chiudi Backtest"/)
   assert.match(row, /openManualClose\(backtestOrderSettlement\(order, props\.row\.settlements\?\.backtest\)\)/)
 })
+
+test('manual cancellation excludes the order from the day return and shows its reason', () => {
+  const extract = name => new Function('return ' + source.match(new RegExp(`    ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n    \\},`))[0].trim().replace(/,$/, '').replace(name + '(', 'function ('))()
+  const cancelled = { source: 'backtest', status: 'error', symbol: 'AAA', side: 'buy', detail: { manual_cancelled: true, manual_comment: 'ordine errato' } }
+  const closed = { source: 'backtest', status: 'closed', entry_price: 100, qty: 2, pnl: 10 }
+  assert.equal(extract('originalDayReturn')([cancelled, closed]), 5)
+  assert.equal(extract('originalDayReturn')([cancelled]), null)
+  const context = { backtestOrderSettlement: () => cancelled }
+  assert.match(extract('backtestOrderSettlementText').call(context, {}, []), /ANNULLATO manualmente.*ordine errato/)
+  assert.match(source, /label="Motivo della forzatura \*"/)
+  assert.match(source, /label="Motivo dell'annullamento \*"/)
+})
