@@ -241,7 +241,7 @@
           </template>
           <template #detail="props">
                 <div class="q-pa-sm">
-                  <template v-if="props.row.raw && !props.row.verification && props.row.raw.status !== 'error'">
+                  <template v-if="props.row.raw && !props.row.marketClosed && !props.row.verification && props.row.raw.status !== 'error'">
                     <ul class="q-my-xs q-pl-md">
                       <li
                         v-for="(line, i) in dayReading(props.row.raw)"
@@ -270,7 +270,7 @@
                           <div v-if="props.row.decisions[source].error" class="text-negative text-caption">{{ decisionErrorText(props.row.decisions[source]) }}</div>
                           <div class="text-caption text-grey-8 q-mb-xs">Barra del segnale: {{ receiptSignalDate(props.row.decisions[source]) || 'non disponibile' }}</div>
                           <div v-if="!(props.row.decisions[source].orders || []).length" class="text-caption text-grey-7">
-                            Nessun ordine. {{ decisionReasons(props.row.decisions[source]) }}
+                            Nessun ordine. {{ props.row.marketClosed ? 'Mercato chiuso secondo il calendario.' : decisionReasons(props.row.decisions[source]) }}
                           </div>
                           <q-list v-else dense bordered separator class="bg-white">
                               <q-item v-for="(order, index) in props.row.decisions[source].orders" :key="`${source}-${index}`">
@@ -476,6 +476,7 @@ import DailyReconciliationTable from '../components/DailyReconciliationTable.vue
 import { api } from 'boot/axios'
 import { constants } from 'boot/constants'
 import { receiptSignalDate, receiptOrderDate, orderSignalMismatch } from '../utils/entryReceiptDates.mjs'
+import { normalClosedMarketDay } from '../utils/watchtowerMarketClosure.mjs'
 
 const CATEGORY_LABELS = {
   never_submitted: 'atteso dal backtest ma nessun ordine reale trovato',
@@ -501,6 +502,7 @@ export default {
       profiles: [],
       selectedProfile: null,
       overview: null,
+      tradingCalendar: {},
       loading: false,
       loadError: '',
       expandedDays: [],
@@ -556,7 +558,8 @@ export default {
       if (!latestDate) return []
       return (this.overview?.entry_comparisons || []).filter((item) => {
         const day = String(item.trading_date || '').slice(0, 10)
-        return day < latestDate && ['diverged', 'error'].includes(item.status)
+        return day < latestDate && ['diverged', 'error'].includes(item.status) &&
+          !this.reconciliationRows.some(row => row.sortDate === day && row.marketClosed)
       }).slice(0, 10).map((item) => {
         const day = String(item.trading_date).slice(0, 10)
         const diffs = item.diffs || []
@@ -734,13 +737,14 @@ export default {
         key: `day-${day}`,
         sortDate: day,
         trading_date: this.formatDate(day),
-        statusLabel: this.brokerActivityOverridesWatchdog(item)
+        marketClosed: normalClosedMarketDay(day, item, this.tradingCalendar),
+        statusLabel: normalClosedMarketDay(day, item, this.tradingCalendar) ? 'mercato chiuso' : this.brokerActivityOverridesWatchdog(item)
           ? this.brokerTelemetryLabel(item)
           : (item.comparison ? this.entryComparisonLabel(item.comparison) : (item.result ? this.rowStatusLabel(item.result) : this.entryStatusLabel(item.decisions))),
-        badgeColor: this.brokerActivityOverridesWatchdog(item)
+        badgeColor: normalClosedMarketDay(day, item, this.tradingCalendar) ? 'positive' : this.brokerActivityOverridesWatchdog(item)
           ? 'dark'
           : (item.comparison ? this.entryComparisonColor(item.comparison) : (item.result ? this.rowBadgeColor(item.result) : this.entryStatusColor(item.decisions))),
-        detail: this.brokerActivityOverridesWatchdog(item) ? this.brokerTelemetryDetail(item) : [
+        detail: normalClosedMarketDay(day, item, this.tradingCalendar) ? 'Mercato chiuso da calendario · nessun ordine atteso' : this.brokerActivityOverridesWatchdog(item) ? this.brokerTelemetryDetail(item) : [
           this.entryHeadline(item.decisions, item.settlements),
           this.alpacaActivityHeadline(item.alpacaActivity),
           item.verification ? this.replayVerificationStatus(item.verification) : '',
@@ -772,6 +776,7 @@ export default {
       if ((this.overview.open_guardrail_alerts || []).length) {
         return 'Attenzione: possibile contaminazione tra strategie sullo stesso account'
       }
+      if (this.latestActivity?.marketClosed) return 'Mercato chiuso · nessun ordine atteso'
       // The banner answers one question only: did the latest scheduled entry
       // agree? Older telemetry/replay failures remain visible below, but must
       // not make a successful current run look failed.
@@ -1226,6 +1231,7 @@ export default {
       if (this.stopCalculationPolling) this.stopCalculationPolling()
       this.loading = true
       this.loadError = ''
+      this.tradingCalendar = {}
       try {
         const { data } = await api.get(`/dyn/obs/watchtower/cron/${profile}/overview`, {
           params: { _ts: Date.now(), ...(this.overview?.profile === profile && this.selectedBaselineId
@@ -1234,6 +1240,19 @@ export default {
         })
         if (profile !== this.selectedProfile || requestVersion !== this.calculationRequestVersion) return
         this.overview = data
+        const dates = ['reconciliation_results', 'entry_decisions', 'entry_comparisons', 'entry_settlements', 'replay_verifications']
+          .flatMap(key => (data?.[key] || []).map(row => String(row.trading_date || '').slice(0, 10)))
+          .filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day)).sort()
+        if (dates.length) {
+          try {
+            const calendar = await api.get('/dyn/al/trading-calendar', { params: { start: dates[0], end: dates[dates.length - 1] } })
+            if (profile !== this.selectedProfile || requestVersion !== this.calculationRequestVersion) return
+            this.tradingCalendar = calendar.data || {}
+          } catch (_) {
+            // Leave classification unchanged when the calendar is unavailable.
+          }
+        }
+        if (profile !== this.selectedProfile || requestVersion !== this.calculationRequestVersion) return
         const baselines = data?.baselines || []
         if (!baselines.some((baseline) => baseline.id === this.selectedBaselineId)) {
           this.selectedBaselineId = baselines[0]?.id ?? null
